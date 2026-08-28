@@ -167,6 +167,9 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     if (!drag) {
       const over = renderer.hitTest(sim, x, y)
       renderer.setHover(over ? over.id : null)
+      // Only arm a wire for deletion when nothing else is under the cursor.
+      renderer.setHoverEdge(over || renderer.handleAt(sim, x, y)
+        ? null : renderer.edgeHitTest(sim, x, y))
       canvas.style.cursor = renderer.handleAt(sim, x, y) ? 'crosshair'
         : over ? 'grab' : 'default'
       return
@@ -223,6 +226,39 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
   canvas.addEventListener('dblclick', () => renderer.resetCamera())
 
+  // Right-click removes: a node with its wires, or a single wire. The same
+  // gesture on both, which is what the cursor highlight is telling you.
+  canvas.addEventListener('contextmenu', ev => {
+    ev.preventDefault()
+    const { x, y } = pointAt(ev)
+    const node = renderer.hitTest(sim, x, y)
+    if (node) {
+      sim.removeNode(node.id)
+      renderer.setHover(null)
+    } else {
+      const edge = renderer.edgeHitTest(sim, x, y)
+      if (!edge) return
+      sim.disconnect(edge.from, edge.to)
+      renderer.setHoverEdge(null)
+    }
+    if (sim.state.scene.autoLayout) sim.autoLayout()
+    renderer.fit(sim.state.nodes)
+    onStats(sim.state.stats)
+  })
+
+  // Drop a type from the palette onto the board.
+  canvas.addEventListener('dragover', ev => { ev.preventDefault() })
+  canvas.addEventListener('drop', ev => {
+    ev.preventDefault()
+    const type = ev.dataTransfer?.getData('text/visualizcy-type')
+    if (!type) return
+    const { x, y } = pointAt(ev)
+    const f = renderer.toFrame(x, y)
+    const { W, H } = renderer.size
+    const n = sim.addNode(type, renderer.fromPx(f.x), f.y / H)
+    if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
+  })
+
   // The fractional coordinates for whatever is currently on screen, ready to
   // paste back into a scene file.
   function layout() {
@@ -242,6 +278,11 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
     resetCamera: () => renderer.resetCamera(),
+    addNode: (type, fx, fy) => {
+      const n = sim.addNode(type, fx, fy)
+      if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
+      return n
+    },
     get timeline() { return timeline },
   }
 }

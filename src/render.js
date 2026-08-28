@@ -29,6 +29,7 @@ export function createRenderer(canvas) {
   // Interaction state the renderer needs to draw: which node is under the
   // cursor (so its + handles show) and any connection being dragged.
   let hoverId = null
+  let hoverEdge = null
   let pending = null
 
   // Camera. Frame coordinates are what every scene is authored in — the export
@@ -211,6 +212,33 @@ export function createRenderer(canvas) {
       { x: box.cx, y: box.cy - box.hh - d, side: 'top' },
       { x: box.cx, y: box.cy + box.hh + d, side: 'bottom' },
     ]
+  }
+
+  // Which wire is under a screen point. Distance from the segment, in frame
+  // space, so zoom does not change how easy a wire is to grab.
+  function edgeHitTest(sim, sx, sy) {
+    const p = toFrame(sx, sy)
+    const boxes = new Map(sim.state.nodes.map(n => [n.id, boxOf(n)]))
+    let best = null, bestD = 10 * S
+    for (const e of sim.state.edges) {
+      if (e.off) continue
+      const a = boxes.get(e.from), b = boxes.get(e.to)
+      if (!a || !b) continue
+      const p1 = edgePoint(a, b.cx, b.cy)
+      const p2 = edgePoint(b, a.cx, a.cy)
+      const d = distToSegment(p, p1, p2)
+      if (d < bestD) { bestD = d; best = e }
+    }
+    return best
+  }
+
+  function distToSegment(p, a, b) {
+    const vx = b.x - a.x, vy = b.y - a.y
+    const len2 = vx * vx + vy * vy
+    if (!len2) return Math.hypot(p.x - a.x, p.y - a.y)
+    let t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2
+    t = Math.max(0, Math.min(1, t))
+    return Math.hypot(p.x - (a.x + vx * t), p.y - (a.y + vy * t))
   }
 
   // Which + handle is under a screen point, if any.
@@ -509,11 +537,15 @@ export function createRenderer(canvas) {
     const full = edgePoint(b, a.cx, a.cy)
     const p2 = { x: mix(p1.x, full.x, reveal), y: mix(p1.y, full.y, reveal) }
 
+    // A wire under the cursor with nothing else over it goes red, so what a
+    // right-click would remove is visible before the click.
+    const armed = hoverEdge && hoverEdge.from === e.from && hoverEdge.to === e.to
+
     ctx.save()
     const faded = Math.max(na?.dim || 0, nb?.dim || 0)
     ctx.globalAlpha = (dead ? 0.22 : reveal) * mix(1, 0.18, faded)
-    ctx.strokeStyle = st.running ? theme.wireActive : theme.wire
-    ctx.lineWidth = 1.5 * S
+    ctx.strokeStyle = armed ? theme.bad : st.running ? theme.wireActive : theme.wire
+    ctx.lineWidth = (armed ? 2.4 : 1.5) * S
     ctx.lineCap = 'round'
     ctx.beginPath()
     ctx.moveTo(p1.x, p1.y)
@@ -724,9 +756,10 @@ export function createRenderer(canvas) {
 
   resize()
   return {
-    draw, resize, fit, hitTest, fromPx, handleAt,
+    draw, resize, fit, hitTest, fromPx, handleAt, edgeHitTest,
     toFrame, resetCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
+    setHoverEdge: e => { hoverEdge = e },
     setPending: p => { pending = p },
     get camera() { return cam },
     get scale() { return S },

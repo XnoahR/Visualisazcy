@@ -9,7 +9,7 @@
 // the meters actually display) is damped separately in advanceAnim, so easing
 // never distorts the numbers it is smoothing.
 
-import { typeOf, roleOf, connectionError } from './registry.js'
+import { typeOf, roleOf, connectionError, NODE_TYPES } from './registry.js'
 import { placement } from './scene.js'
 import { damp, clamp01 } from './ease.js'
 
@@ -36,9 +36,9 @@ export function createSim(sceneDef, opts = {}) {
 
   let seq = 0
 
-  function load(def = state.scene) {
-    state.scene = def
-    state.nodes = (def.nodes || []).map(n => {
+  // One place that knows how to turn a spec into a runtime node, so a node
+  // dropped from the palette is identical to one that came from a scene file.
+  function makeNode(n) {
       const at = placement(n, state.portrait)
       return {
         id: n.id,
@@ -69,10 +69,40 @@ export function createSim(sceneDef, opts = {}) {
         hits: 0, misses: 0,             // cache
         peakBusy: 0,
       }
-    })
+  }
+
+  function load(def = state.scene) {
+    state.scene = def
+    state.nodes = (def.nodes || []).map(makeNode)
     state.edges = (def.edges || []).map(e => ({ ...e, off: false }))
     reset()
     stageEntrance(state.animTime)
+  }
+
+  // Drop a new node onto the board. It is written into the scene as well as the
+  // running state, so the sandbox editor and a copied layout both see it.
+  function addNode(type, x, y) {
+    if (!NODE_TYPES[type]) return null
+    let id = type, i = 1
+    while (byId(id)) id = `${type}${++i}`
+    const spec = { id, type, x: clamp01(x), y: clamp01(y) }
+    state.scene.nodes.push(spec)
+    const node = makeNode(spec)
+    node.appearAt = state.animTime
+    state.nodes.push(node)
+    return node
+  }
+
+  function removeNode(id) {
+    state.nodes = state.nodes.filter(n => n.id !== id)
+    state.edges = state.edges.filter(e => e.from !== id && e.to !== id)
+    state.packets = state.packets.filter(p => p.from !== id && p.to !== id)
+    if (state.scene.nodes) {
+      state.scene.nodes = state.scene.nodes.filter(n => n.id !== id)
+    }
+    if (state.scene.edges) {
+      state.scene.edges = state.scene.edges.filter(e => e.from !== id && e.to !== id)
+    }
   }
 
   // Cards enter in flow order: sources first, then whatever they feed. Reading
@@ -376,13 +406,16 @@ export function createSim(sceneDef, opts = {}) {
     const why = connectionError(from, to, state.edges)
     if (why) return why
     state.edges.push({ from: fromId, to: toId, off: false })
+    if (state.scene.edges) state.scene.edges.push({ from: fromId, to: toId })
     if (state.scene.autoLayout) autoLayout()
     return null
   }
 
   function disconnect(fromId, toId) {
-    state.edges = state.edges.filter(e => !(e.from === fromId && e.to === toId))
-    state.packets = state.packets.filter(p => !(p.from === fromId && p.to === toId))
+    const gone = e => e.from === fromId && e.to === toId
+    state.edges = state.edges.filter(e => !gone(e))
+    state.packets = state.packets.filter(p => !gone(p))
+    if (state.scene.edges) state.scene.edges = state.scene.edges.filter(e => !gone(e))
   }
 
   function kill(id) {
@@ -405,5 +438,6 @@ export function createSim(sceneDef, opts = {}) {
   return {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
+    addNode, removeNode,
   }
 }

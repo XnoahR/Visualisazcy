@@ -129,6 +129,21 @@ real word says more than an ellipsis. Zoom in for the rest.
 
 ![sandbox](docs/sandbox.png)
 
+## The palette
+
+![palette](docs/palette.png)
+
+Drag a type onto the board to place it. The palette is generated straight from
+`registry.js`, so adding a type there is all it takes to make it placeable —
+there is no second list to keep in sync. Each row shows the role, because that
+is what decides where it can be wired: **gives**, **takes**, or **both**.
+
+Right-click removes: a node with all its wires, or a single wire. The wire under
+the cursor turns red first, so what a right-click would remove is visible before
+the click. Adding and removing write through to the scene definition as well as
+the running state, so the ✎ editor and ⧉ layout copy always agree with what is
+on screen.
+
 ## Plugging things together
 
 Drag from a **+** handle to wire one node to another. Handles only appear on
