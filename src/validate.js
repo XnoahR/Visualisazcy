@@ -11,6 +11,7 @@
 
 import { NODE_TYPES } from './registry.js'
 import { markTypes } from './annotate.js'
+import { WORLD_MIN, WORLD_MAX } from './scene.js'
 
 const TONES = ['good', 'bad', 'warn', 'accent', 'dim', 'plain']
 const KINDS = ['graph', 'slots', 'trace']
@@ -48,10 +49,15 @@ export function validateScene(def) {
       err(`${at}.role`, `unknown role "${n.role}". known roles: ${ROLES.join(', ')}`)
     }
     for (const axis of ['x', 'y']) {
-      if (typeof n[axis] !== 'number') err(`${at}.${axis}`, `${axis} must be a number`)
-      else if (n[axis] < 0 || n[axis] > 1) {
-        err(`${at}.${axis}`, `${axis} is ${n[axis]}; positions are fractions of the canvas, so 0..1`)
+      if (typeof n[axis] !== 'number') { err(`${at}.${axis}`, `${axis} must be a number`); continue }
+      // 0..1 is the export frame; outside it is the off-canvas area, which is a
+      // legitimate place to park something. Only the world edge is an error.
+      if (n[axis] < WORLD_MIN || n[axis] > WORLD_MAX) {
+        err(`${at}.${axis}`, `${axis} is ${n[axis]}; the board runs ${WORLD_MIN} to ${WORLD_MAX}`)
       }
+    }
+    if (n.x < 0 || n.x > 1 || n.y < 0 || n.y > 1) {
+      warn(at, `"${n.id}" sits outside the export frame, so it will not appear in a render`)
     }
     if (n.portrait && (!Array.isArray(n.portrait) || n.portrait.length !== 2)) {
       err(`${at}.portrait`, 'portrait must be [x, y]')

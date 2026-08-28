@@ -5,6 +5,7 @@
 import { theme, card as C } from './theme.js'
 import { typeOf, roleOf, canGive } from './registry.js'
 import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
+import { inFrame } from './scene.js'
 import { drawAnnotations } from './annotate.js'
 
 // Scene-kind registry. 'graph' is built in; anything else registers into it.
@@ -132,7 +133,7 @@ export function createRenderer(canvas) {
   // is what keeps a scene authored for 16:9 legible at 1:1.
   function fit(nodes) {
     const gap = 16
-    const visible = nodes.filter(n => !n.hidden)
+    const visible = nodes.filter(n => !n.hidden && inFrame(n))
     for (let i = 0; i < visible.length; i++) {
       for (let j = i + 1; j < visible.length; j++) {
         const dx = Math.abs(visible[i].x - visible[j].x) * W * (1 - gutter)
@@ -152,11 +153,11 @@ export function createRenderer(canvas) {
   // transform around the whole composition, so every painter below — cards,
   // wires, packets, annotations, chrome — keeps working in the space it was
   // written for and the artboard zooms as one piece.
+  // No clamping. Pinning cards inside the frame is what made the pan/zoom
+  // canvas a lie: you could travel to empty space but nothing could live there.
   function boxOf(n) {
     const w = C.w * S, h = C.h * S
-    const cx = clamp(toPx(n.x), w / 2 + 4 + gutter * W, W - w / 2 - 4)
-    const cy = clamp(n.y * H, h / 2 + 4, H - h / 2 - 4)
-    return { cx, cy, w, h, hw: w / 2, hh: h / 2 }
+    return { cx: toPx(n.x), cy: n.y * H, w, h, hw: w / 2, hh: h / 2 }
   }
 
   // A scene declares its kind; the kind decides how the body of the frame is
@@ -366,7 +367,7 @@ export function createRenderer(canvas) {
 
     ctx.save()
     applyCamera()
-    paintFrameEdge()
+    paintFrameEdge((st.nodes || []).some(n => !n.hidden && !inFrame(n)))
 
     // 'graph' stays a closure over this renderer's card painters; registered
     // kinds get the surface and draw whatever they like on it.
@@ -395,8 +396,10 @@ export function createRenderer(canvas) {
   }
 
   // The export bounds, visible only once you zoom out past them.
-  function paintFrameEdge() {
-    if (cam.zoom > 0.995 && Math.abs(cam.x - W / 2) < 1 && Math.abs(cam.y - H / 2) < 1) return
+  function paintFrameEdge(anyOutside) {
+    const parked = cam.zoom <= 0.995 || Math.abs(cam.x - W / 2) >= 1 ||
+                   Math.abs(cam.y - H / 2) >= 1 || anyOutside
+    if (!parked) return
     ctx.save()
     ctx.strokeStyle = theme.cardEdgeHi
     ctx.lineWidth = 1 / cam.zoom
@@ -711,6 +714,7 @@ export function createRenderer(canvas) {
 
     ctx.save()
     ctx.globalAlpha = (n.dead ? 0.35 : 1) * easeOutCubic(enter) * mix(1, 0.2, n.dim)
+      * (inFrame(n) ? 1 : 0.4)   // parked outside the export frame
     ctx.translate(cx, cy + lift)
     ctx.scale(scale, scale)
     ctx.translate(-cx, -cy)

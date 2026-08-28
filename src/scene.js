@@ -4,6 +4,14 @@
 //   node('client', 'client', 0.18, 0.5, { rps: 6, portrait: [0.5, 0.14] })
 //   edge('client', 'lb')
 
+// The frame (0..1) is the EXPORT bounds, not the world. Objects may be parked
+// outside it — they stay on the board and simply do not appear in the render,
+// which is what an off-canvas area is for. Bounded so a stray drag cannot fling
+// something a thousand screens away.
+export const WORLD_MIN = -1.5
+export const WORLD_MAX = 2.5
+export const inFrame = (n) => n.x >= 0 && n.x <= 1 && n.y >= 0 && n.y <= 1
+
 export function node(id, type, x, y, opts = {}) {
   return {
     id, type, x, y,

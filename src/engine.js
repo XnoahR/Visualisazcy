@@ -4,6 +4,7 @@ import { createSim } from './sim.js'
 import { createRenderer } from './render.js'
 import { createTimeline } from './timeline.js'
 import { clamp01 } from './ease.js'
+import { WORLD_MIN, WORLD_MAX } from './scene.js'
 import { connectionError } from './registry.js'
 
 export function createEngine(canvas, sceneDef, opts = {}) {
@@ -300,8 +301,9 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     if (!drag.moved) return
     const { H } = renderer.size
     const f = renderer.toFrame(x, y)
-    drag.node.x = clamp01(renderer.fromPx(f.x - drag.offX))
-    drag.node.y = clamp01((f.y - drag.offY) / H)
+    const world = v => Math.max(WORLD_MIN, Math.min(WORLD_MAX, v))
+    drag.node.x = world(renderer.fromPx(f.x - drag.offX))
+    drag.node.y = world((f.y - drag.offY) / H)
     writeBack(drag.node)
   })
 

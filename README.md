@@ -228,6 +228,31 @@ Two properties worth knowing:
 
 A refused connection is not a step: the mark is popped back off.
 
+## The board is bigger than the frame
+
+![off-canvas](docs/offcanvas.png)
+
+`0..1` is the **export frame**, not the world. Objects can be parked outside it:
+they stay on the board, keep their wires, and simply do not appear in a render.
+The board runs `-1.5` to `2.5`, bounded so a stray drag cannot fling something a
+thousand screens away.
+
+This was wrong for a while. Two clamps caged everything inside the frame — one in
+the drag handler, one in `boxOf()` — which made the pan/zoom canvas a lie: you
+could travel to empty space but nothing could live there. Both are gone.
+
+Three things follow from it:
+
+- An object outside the frame renders at 40% opacity, so what will not be in the
+  video is visible at a glance.
+- The dashed frame outline now appears whenever anything is parked outside, not
+  only when the camera has moved.
+- `fit()` ignores parked objects when deciding how much to shrink cards —
+  otherwise one thing set aside would shrink everything that stayed.
+
+The validator matches: outside the frame is a **warning** ("will not appear in a
+render"), only past the board edge is an error.
+
 ## The palette
 
 ![palette](docs/palette.png)
