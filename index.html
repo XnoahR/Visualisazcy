@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualizcy — system diagrams that run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08090d; --card: #14171f; --edge: rgba(255,255,255,0.055);
+    --edge-hi: rgba(255,255,255,0.13); --text: #f5f6fa; --dim: #9498ab;
+    --mute: #5a5f74; --accent: #6ea0ff; --good: #6ee7b7; --warn: #fcd34d; --bad: #fca5a5;
+    --display: "Space Grotesk", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--display); -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    display: grid; grid-template-columns: 1fr 268px; gap: 22px;
+    max-width: 1240px; margin: 0 auto; padding: 26px 22px 40px;
+  }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
+  header { grid-column: 1 / -1; margin-bottom: 2px; }
+  h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .sub { color: var(--mute); font-size: 12px; margin-top: 4px; }
+
+  .stage { display: flex; align-items: flex-start; justify-content: center; }
+  .frame {
+    background: var(--bg); border: 1px solid var(--edge); border-radius: 16px;
+    overflow: hidden; width: 100%; position: relative;
+  }
+  .frame[data-aspect="16:9"] { aspect-ratio: 16/9; }
+  .frame[data-aspect="1:1"]  { aspect-ratio: 1/1;  max-width: 620px; }
+  .frame[data-aspect="9:16"] { aspect-ratio: 9/16; max-width: 380px; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--edge); border-radius: 13px; padding: 13px; }
+  .lbl {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
+    color: var(--mute); text-transform: uppercase; margin-bottom: 9px;
+  }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--dim);
+    background: rgba(255,255,255,0.035); border: 1px solid var(--edge);
+    border-radius: 8px; padding: 7px 11px; cursor: pointer; transition: .13s;
+  }
+  button:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+  button[aria-pressed="true"] { background: rgba(110,160,255,0.14); border-color: rgba(110,160,255,0.4); color: var(--accent); }
+  .scenes button { display: block; width: 100%; text-align: left; margin-bottom: 5px; }
+  .primary { flex: 1; color: var(--text); }
+
+  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; }
+  dt { font-size: 11.5px; color: var(--dim); }
+  dd { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
+  .caption { font-size: 12px; line-height: 1.55; color: var(--dim); }
+  .caption strong { color: var(--text); font-weight: 600; display: block; margin-bottom: 5px; font-size: 12.5px; }
+  .tip { font-size: 11px; color: var(--mute); line-height: 1.5; }
+  .tl-label {
+    font-family: var(--mono); font-size: 10px; color: var(--mute);
+    margin-top: 9px; line-height: 1.5; letter-spacing: .04em; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Visualizcy</h1>
+    <div class="sub">System diagrams that actually run. Tap any node to kill it.</div>
+  </header>
+
+  <div class="stage">
+    <div class="frame" id="frame" data-aspect="16:9"><canvas id="c"></canvas></div>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <div class="row">
+        <button class="primary" id="play">▶ Play</button>
+        <button id="reset">Reset</button>
+        <button id="copy" title="Copy the current node positions as scene data">⧉</button>
+      </div>
+    </div>
+
+    <div class="panel" id="tl-panel" hidden>
+      <div class="lbl">Story</div>
+      <div class="row">
+        <button id="tl-prev">‹</button>
+        <button class="primary" id="tl-step" style="text-align:center">1 / 1</button>
+        <button id="tl-next">›</button>
+      </div>
+      <div class="tl-label" id="tl-label"></div>
+    </div>
+
+    <div class="panel">
+      <div class="lbl">Aspect</div>
+      <div class="row" id="aspect">
+        <button data-a="16:9" aria-pressed="true">16:9</button>
+        <button data-a="1:1"  aria-pressed="false">1:1</button>
+        <button data-a="9:16" aria-pressed="false">9:16</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="lbl">Live</div>
+      <dl>
+        <dt>Status</dt>     <dd id="m-status" style="color:var(--mute)">Idle</dd>
+        <dt>In flight</dt>  <dd id="m-flight">0</dd>
+        <dt>Processed</dt>  <dd id="m-proc" style="color:var(--good)">0</dd>
+        <dt>Dropped</dt>    <dd id="m-drop" style="color:var(--bad)">0</dd>
+        <dt>Overloaded</dt> <dd id="m-over" style="color:var(--warn)">0</dd>
+      </dl>
+    </div>
+
+    <div class="panel scenes">
+      <div class="lbl">Scenes</div>
+      <div id="scenes"></div>
+    </div>
+
+    <div class="panel">
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <div class="panel">
+      <div class="tip">Drag a node to move it. Click without dragging to kill it. ⧉ copies the current positions as scene data.</div>
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+import { createEngine } from './src/engine.js'
+import { SCENES } from './scenes/index.js'
+
+const canvas = document.getElementById('c')
+const frame  = document.getElementById('frame')
+const $ = id => document.getElementById(id)
+
+let current = SCENES[0]
+const engine = createEngine(canvas, current, { onStats: paint })
+window.__visualizcy = engine   // handy in the console, and how the tests inspect state
+
+function paintTimeline() {
+  const tl = engine.timeline
+  $('tl-panel').hidden = !tl
+  if (!tl) return
+  $('tl-step').textContent = `${tl.state.idx + 1} / ${tl.state.total}`
+  $('tl-label').textContent = tl.current.label || ''
+}
+
+function paint() {
+  const st = engine.state
+  $('m-status').textContent = st.running ? 'Running' : 'Idle'
+  $('m-status').style.color = st.running ? 'var(--good)' : 'var(--mute)'
+  $('m-flight').textContent = st.packets.length
+  $('m-proc').textContent   = st.stats.processed
+  $('m-drop').textContent   = st.stats.dropped
+  $('m-over').textContent   = st.stats.overloaded
+  $('play').textContent     = st.running ? '❙❙ Pause' : '▶ Play'
+  paintTimeline()
+}
+
+// scene list
+const list = $('scenes')
+for (const s of SCENES) {
+  const b = document.createElement('button')
+  b.textContent = s.title
+  b.setAttribute('aria-pressed', String(s === current))
+  b.onclick = () => {
+    current = s
+    engine.load(s)
+    $('caption').innerHTML = `<strong>${s.title}</strong>${s.caption}`
+    for (const el of list.children) el.setAttribute('aria-pressed', String(el === b))
+    paint()
+  }
+  list.appendChild(b)
+}
+$('caption').innerHTML = `<strong>${current.title}</strong>${current.caption}`
+
+$('tl-prev').onclick = () => { engine.goToStep(engine.timeline.state.idx - 1); paint() }
+$('tl-next').onclick = () => { engine.goToStep(engine.timeline.state.idx + 1); paint() }
+
+$('play').onclick  = () => { engine.toggle(); paint() }
+$('reset').onclick = () => { engine.reset(); paint() }
+$('copy').onclick = async () => {
+  const text = engine.layout().map(p => `  ${p.id}: [${p.x}, ${p.y}],`).join('\n')
+  try { await navigator.clipboard.writeText(text) } catch {}
+  console.log(text)
+  $('copy').textContent = '✓'
+  setTimeout(() => { $('copy').textContent = '⧉' }, 1200)
+}
+
+$('aspect').onclick = ev => {
+  const b = ev.target.closest('button')
+  if (!b) return
+  frame.dataset.aspect = b.dataset.a
+  for (const el of $('aspect').children) el.setAttribute('aria-pressed', String(el === b))
+  requestAnimationFrame(() => engine.resize())
+}
+
+// keep In flight ticking even while idle
+setInterval(paint, 120)
+paint()
+</script>
+</body>
+</html>

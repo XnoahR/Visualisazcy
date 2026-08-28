@@ -1,0 +1,6 @@
+.DS_Store
+node_modules/
+.playwright-mcp/
+
+# research frames captured from someone else material, kept local only
+docs/reference/
