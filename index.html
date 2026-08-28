@@ -116,6 +116,21 @@
   dd { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
   .scenes button { display: block; width: 100%; text-align: left; margin-bottom: 4px; height: auto; padding: 7px 10px; font-weight: 500; }
   .tip { font-size: 10.5px; color: var(--mute); line-height: 1.6; }
+  .fld { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .fld label { font-size: 11px; color: var(--dim); flex: 1; }
+  .fld input {
+    width: 82px; height: 26px; border-radius: 7px; background: var(--bg);
+    border: 1px solid var(--edge); color: var(--text); padding: 0 8px;
+    font-family: var(--mono); font-size: 11px; text-align: right;
+  }
+  .fld input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fld .unit { font-family: var(--mono); font-size: 9px; color: var(--mute); width: 18px; }
+  .derived {
+    display: flex; justify-content: space-between; margin-top: 9px; padding-top: 9px;
+    border-top: 1px solid var(--edge); font-family: var(--mono); font-size: 11px;
+  }
+  .derived b { color: var(--good); font-weight: 600; }
+  .insp-sec { margin-top: 12px; }
   .tip b { color: var(--dim); font-weight: 600; }
 
   /* ── timeline strip ──────────────────────────────────────────────────── */
@@ -203,6 +218,11 @@
         </button>
       </div>
     </div>
+    <div class="home-sec" id="saved-sec" hidden>
+      <div class="lbl">Your boards</div>
+      <div class="home-grid" id="saved-grid"></div>
+    </div>
+
     <div class="home-sec">
       <div class="lbl">Open a scene</div>
       <div class="home-grid" id="home-grid"></div>
@@ -221,6 +241,12 @@
     <button class="icon" id="home-btn" aria-label="Back to the start screen" title="Back to the start screen">⌂</button>
 
     <div class="sep"></div>
+    <div class="seg" id="mode" title="Edit places and wires things; Play runs it">
+      <button data-m="edit" aria-pressed="true">Edit</button>
+      <button data-m="play" aria-pressed="false">Play</button>
+    </div>
+
+    <div class="sep"></div>
     <div class="grp">
       <button class="primary" id="play" title="Run the simulation">▶ Play</button>
       <button id="reset" title="Reset and replay the build-in">Reset</button>
@@ -237,6 +263,7 @@
       <button id="sect" title="Add a section around the middle of the board">▢ Section</button>
       <button id="copy" title="Copy the current node positions as scene data">⧉ Layout</button>
       <button id="edit" title="Edit this scene as JSON" aria-pressed="false">✎ Source</button>
+      <button id="save" title="Save this board to this browser">⌸ Save</button>
     </div>
 
     <div class="spacer"></div>
@@ -279,6 +306,11 @@
         <div id="caption"></div>
       </div>
 
+      <div class="panel" id="insp-panel" hidden>
+        <span class="lbl" id="insp-title">Selection</span>
+        <div id="insp"></div>
+      </div>
+
       <div class="panel">
         <span class="lbl">Live</span>
         <dl>
@@ -300,10 +332,11 @@
       <div class="panel">
         <span class="lbl">On the board</span>
         <div class="tip">
-          <b>Move</b> drag a node · <b>Kill</b> click without dragging<br>
-          <b>Connect</b> drag from a ＋ handle · <b>Delete</b> right-click<br>
-          <b>Pan</b> drag empty space · <b>Zoom</b> wheel · <b>Fit</b> double-click<br>
-          ＋ handles appear only on objects that may send.
+          <b>Edit</b> click selects · drag empty space selects many · shift adds<br>
+          <b>Move</b> drag any selected object · <b>Connect</b> drag a ＋ handle<br>
+          <b>⌫</b> delete selection · <b>Ctrl+D</b> duplicate · <b>Esc</b> deselect<br>
+          <b>Pan</b> hold space and drag, or middle button · <b>Zoom</b> wheel<br>
+          <b>Play</b> click an object to kill it and watch the rest cope.
         </div>
       </div>
     </aside>
@@ -334,7 +367,8 @@ import { SCENES, blankScene } from './scenes/index.js'
 import { validateAll, validateScene } from './src/validate.js'
 import { record, download, supported as canRecord } from './src/export.js'
 import { scene } from './src/scene.js'
-import { NODE_TYPES } from './src/registry.js'
+import { NODE_TYPES, capacityOf, DECLARED } from './src/registry.js'
+import * as store from './src/store.js'
 import './src/renderers/slots.js'   // self-registers the 'slots' kind
 import './src/renderers/trace.js'   // and the 'trace' kind
 
@@ -350,6 +384,10 @@ const $ = id => document.getElementById(id)
 let current = SCENES[0]
 const engine = createEngine(canvas, current, {
   onStats: paint,
+  onMode: (m) => {
+    for (const el of $('mode').children) el.setAttribute('aria-pressed', String(el.dataset.m === m))
+  },
+  onSelection: (ids) => drawInspector(ids),
   onHistory: (canUndo, canRedo) => {
     $('undo').disabled = !canUndo
     $('redo').disabled = !canRedo
@@ -463,6 +501,116 @@ $('aspect').onclick = ev => {
 }
 
 new ResizeObserver(() => sizeFrame()).observe(stage)
+
+// --- inspector -------------------------------------------------------------
+// Bound to the selection. Blank a field and the type's default comes back, so
+// there is always a way out of a value you regret.
+
+const NUMERIC = [
+  ['latency', 'Latency', 'ms'],
+  ['concurrency', 'At once', ''],
+  ['maxQueue', 'Max queue', ''],
+]
+
+function field(id, key, label, unit, value, placeholder) {
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  wrap.innerHTML = `<label>${label}</label>
+    <input type="text" value="${value ?? ''}" placeholder="${placeholder ?? ''}">
+    <span class="unit">${unit || ''}</span>`
+  const input = wrap.querySelector('input')
+  input.addEventListener('change', () => {
+    const raw = input.value.trim()
+    const num = raw === '' ? '' : Number(raw)
+    engine.setNodeProp(id, key, raw === '' ? '' : (Number.isFinite(num) ? num : raw))
+    drawInspector(engine.selection)
+  })
+  return wrap
+}
+
+function drawInspector(ids) {
+  const box = $('insp')
+  $('insp-panel').hidden = !ids.length
+  if (!ids.length) return
+  if (ids.length > 1) {
+    $('insp-title').textContent = `${ids.length} selected`
+    box.innerHTML = `<div class="tip">Move them together, ⌫ to delete, Ctrl+D to duplicate.
+      Select one to edit its properties.</div>`
+    return
+  }
+
+  const n = engine.sim.byId(ids[0])
+  if (!n) return
+  const def = NODE_TYPES[n.type]
+  $('insp-title').textContent = def.name
+  box.innerHTML = ''
+
+  box.appendChild(field(n.id, 'label', 'Label', '', n.spec.label ?? '', def.name))
+  if ((n.spec.role ?? def.role) === 'source') {
+    box.appendChild(field(n.id, 'rps', 'Sends', '/s', n.spec.rps ?? '', '6'))
+  }
+  for (const [key, label, unit] of NUMERIC) {
+    box.appendChild(field(n.id, key, label, unit, n.spec[key] ?? '', def[key] ?? '—'))
+  }
+  if ((n.spec.hitRate ?? def.hitRate) != null) {
+    box.appendChild(field(n.id, 'hitRate', 'Hit rate', '', n.spec.hitRate ?? '', String(def.hitRate)))
+  }
+
+  const derived = document.createElement('div')
+  derived.className = 'derived'
+  const cap = capacityOf(n)
+  derived.innerHTML = `<span>Capacity</span><b>${Number.isFinite(cap) ? Math.round(cap) + ' /s' : '∞'}</b>`
+  box.appendChild(derived)
+
+  const head = document.createElement('div')
+  head.className = 'lbl insp-sec'
+  head.textContent = 'Declared · not simulated'
+  box.appendChild(head)
+  for (const k of DECLARED) {
+    box.appendChild(field(n.id, k, k[0].toUpperCase() + k.slice(1), '', n.spec[k] ?? '', '—'))
+  }
+}
+
+// --- saving ---------------------------------------------------------------
+
+$('save').onclick = () => {
+  const btn = $('save')
+  const res = store.save(engine.sim.state.scene)
+  btn.textContent = res.ok ? '✓ Saved' : '⌸ Failed'
+  if (!res.ok) console.warn('Visualizcy: ' + res.reason)
+  else drawSaved()
+  setTimeout(() => { btn.textContent = '⌸ Save' }, 1500)
+}
+
+function drawSaved() {
+  const rows = store.list()
+  $('saved-sec').hidden = !rows.length
+  const grid = $('saved-grid')
+  grid.innerHTML = ''
+  for (const row of rows) {
+    const b = document.createElement('button')
+    b.className = 'tpl'
+    b.innerHTML = `<span class="tpl-t">${row.title}</span>
+      <span class="tpl-d">Saved ${store.ago(row.at)}</span>
+      <span class="tpl-meta"><span class="chip">${row.nodes} objects</span>
+        <span class="chip" data-del="${row.id}">delete</span></span>`
+    b.onclick = (ev) => {
+      if (ev.target.dataset.del) {
+        store.remove(ev.target.dataset.del)
+        drawSaved()
+        return
+      }
+      const def = store.load(row.id)
+      if (def) open(scene(def))
+    }
+    grid.appendChild(b)
+  }
+}
+
+$('mode').onclick = ev => {
+  const b = ev.target.closest('button')
+  if (b) engine.setMode(b.dataset.m)
+}
 
 // --- start screen ---------------------------------------------------------
 
@@ -607,6 +755,11 @@ setInterval(paint, 120)
 
 // Prime the first scene but stay on the start screen: opening straight into a
 // scene is what the start screen exists to avoid.
+if (!store.available()) {
+  $('save').disabled = true
+  $('save').title = 'This browser is not letting the page store anything'
+}
+drawSaved()
 open(current, { keepHome: true })
 </script>
 </body>

@@ -299,6 +299,32 @@ Two properties worth knowing:
 
 A refused connection is not a step: the mark is popped back off.
 
+## Edit and Play
+
+Two modes, because their gestures collided: a click cannot both select a node
+and kill it. **Edit** places, selects, wires and arranges. **Play** runs the
+simulation and a click kills. Opening a board always returns you to Edit.
+
+In Edit: click selects, dragging empty space draws a selection band, shift adds,
+and dragging any selected object moves the whole selection by the same delta.
+`⌫` deletes, `Ctrl+D` duplicates down-right, `Esc` deselects. Panning moved to
+space-and-drag or the middle button, since empty-space drag now selects.
+
+Cards no longer shrink as you add objects. `fit()` applies to a **composition**
+— a scene with steps, headed for a frame — and never to a free board, where
+legibility comes from zoom. Nine objects used to drive the card scale to 0.42;
+it now holds at the width-derived base.
+
+## Saving
+
+`⌸ Save` keeps a board in this browser, and saved boards appear on the start
+screen. Everything a board is already lives in the scene definition, so this is
+serialisation and an index rather than a format — which was the argument for
+keeping scenes as data in the first place.
+
+Storage can be unavailable or full. Every call is guarded and returns a result
+instead of throwing: losing a board is bad, taking the app down with it is worse.
+
 ## The board is bigger than the frame
 
 The resting view sits at zoom `0.78`, so there is visible board around the

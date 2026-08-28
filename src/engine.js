@@ -3,6 +3,7 @@
 import { createSim } from './sim.js'
 import { createRenderer } from './render.js'
 import { createTimeline } from './timeline.js'
+import { typeOf } from './registry.js'
 import { clamp01 } from './ease.js'
 import { WORLD_MIN, WORLD_MAX } from './scene.js'
 import { connectionError } from './registry.js'
@@ -53,6 +54,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     // A recording must be the export frame, not whatever you were looking at.
     // Without this, panning before pressing record silently changed the video.
     restoreCamera = renderer.frameCamera()
+    renderer.fit(sim.state.nodes, true)     // an export is always a composition
     sim.reset({ replay: true })
     sim.state.running = true
     if (timeline) { timeline.restart(); timeline.state.playing = true }
@@ -76,6 +78,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   }
 
   function play() {
+    if (mode !== 'play') { mode = 'play'; clearSelection(); onMode(mode) }
     sim.state.running = true
     if (timeline) {
       // Replaying from the end restarts the story rather than sitting on the
@@ -99,11 +102,15 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   }
 
   function load(def) {
+    // Opening a board is an editing act. Without this you inherited Play from
+    // whatever ran last, and your first click killed something.
+    if (mode !== 'edit') { mode = 'edit'; onMode(mode) }
+    clearSelection()
     sim.load(def)
     sim.relayout(isPortrait())
     sim.state.running = false
     timeline = def.steps ? createTimeline(sim, def) : null
-    renderer.fit(sim.state.nodes)
+    renderer.fit(sim.state.nodes, !!timeline)
     clearHistory()
     onStats(sim.state.stats)
   }
@@ -119,18 +126,75 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     renderer.resize()
     sim.relayout(isPortrait())
     if (sim.state.scene.autoLayout) sim.autoLayout()
-    renderer.fit(sim.state.nodes)
+    renderer.fit(sim.state.nodes, !!timeline)
   }
 
+  const typing = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+
   function onKey(ev) {
+    if (typing(ev.target)) return
     const mod = ev.metaKey || ev.ctrlKey
-    if (!mod || ev.key.toLowerCase() !== 'z') return
-    const t = ev.target
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-    ev.preventDefault()
-    ev.shiftKey ? redo() : undo()
+
+    if (mod && ev.key.toLowerCase() === 'z') {
+      ev.preventDefault()
+      return void (ev.shiftKey ? redo() : undo())
+    }
+    if (mod && ev.key.toLowerCase() === 'd') {
+      ev.preventDefault()
+      return duplicateSelection()
+    }
+    if (ev.code === 'Space') { spaceDown = true; canvas.style.cursor = 'grab'; return }
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && selection.size) {
+      ev.preventDefault()
+      mark()
+      for (const id of [...selection]) sim.removeNode(id)
+      clearSelection()
+      if (sim.state.scene.autoLayout) sim.autoLayout()
+      renderer.fit(sim.state.nodes, !!timeline)
+      onStats(sim.state.stats)
+    }
+    if (ev.key === 'Escape') clearSelection()
   }
+
+  function onKeyUp(ev) {
+    if (ev.code === 'Space') { spaceDown = false; canvas.style.cursor = 'default' }
+  }
+
+  // Copies sit down-right of their originals, the way every canvas tool does it,
+  // so the copy is visible instead of hiding exactly behind the thing it copied.
+  // One place that writes a property, so the runtime node and the scene spec can
+  // never drift apart. Blank clears the override and the type's default returns.
+  function setNodeProp(id, key, value) {
+    const n = sim.byId(id)
+    if (!n) return
+    mark()
+    if (value === '' || value == null) delete n.spec[key]
+    else n.spec[key] = value
+    if (key === 'label') n.label = value || typeOf(n).name
+    if (key === 'rps') n.rps = Number(value) || 0
+    onStats(sim.state.stats)
+  }
+
+  function duplicateSelection() {
+    if (!selection.size) return
+    mark()
+    const made = []
+    for (const id of [...selection]) {
+      const n = sim.byId(id)
+      if (!n) continue
+      const copy = sim.addNode(n.type, n.x + 0.04, n.y + 0.06)
+      if (!copy) continue
+      Object.assign(copy.spec, { ...n.spec, id: copy.id, x: copy.x, y: copy.y })
+      copy.label = n.label
+      made.push(copy.id)
+    }
+    select(made)
+    renderer.fit(sim.state.nodes, !!timeline)
+    onStats(sim.state.stats)
+  }
+
   window.addEventListener('keydown', onKey)
+  window.addEventListener('keyup', onKeyUp)
 
   const ro = new ResizeObserver(resize)
   ro.observe(canvas)
@@ -173,7 +237,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
   function afterHistory() {
     if (sim.state.scene.autoLayout) sim.autoLayout()
-    renderer.fit(sim.state.nodes)
+    renderer.fit(sim.state.nodes, !!timeline)
     renderer.setHover(null)
     renderer.setHoverEdge(null)
     renderer.setHoverSection(null)
@@ -187,11 +251,44 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     onHistory(false, false)
   }
 
+  // --- modes -----------------------------------------------------------------
+  // Edit and Play were fused, and their gestures collided: a click could not
+  // both select a node and kill it. Splitting them is what makes selection —
+  // and everything selection unlocks — possible at all.
+  let mode = 'edit'
+  const selection = new Set()
+  const onMode = opts.onMode || (() => {})
+
+  function setMode(m) {
+    if (m === mode) return
+    mode = m
+    if (m === 'edit') pause()
+    clearSelection()
+    onMode(mode)
+  }
+
+  function clearSelection() {
+    selection.clear()
+    renderer.setSelection(selection)
+    onSelection([...selection])
+  }
+
+  function select(ids, { add = false } = {}) {
+    if (!add) selection.clear()
+    for (const id of ids) add && selection.has(id) ? selection.delete(id) : selection.add(id)
+    renderer.setSelection(selection)
+    onSelection([...selection])
+  }
+
+  const onSelection = opts.onSelection || (() => {})
+
   const DRAG_SLOP = 4
   let drag = null
   let panning = null
   let wire = null
   let secDrag = null
+  let marquee = null
+  let spaceDown = false
   const onNotice = opts.onNotice || (() => {})
   const onHistory = opts.onHistory || (() => {})
 
@@ -232,10 +329,26 @@ export function createEngine(canvas, sceneDef, opts = {}) {
         try { canvas.setPointerCapture(ev.pointerId) } catch {}
         return
       }
-      // Empty space pans the camera, the way any canvas tool behaves.
-      panning = { x, y }
+      // In Edit, empty space draws a selection band; hold space or use the
+      // middle button to pan instead. In Play there is nothing to select, so
+      // dragging just moves the camera.
+      const wantsPan = mode === 'play' || spaceDown || ev.button === 1
+      if (wantsPan) {
+        panning = { x, y }
+      } else {
+        const f = renderer.toFrame(x, y)
+        marquee = { x0: f.x, y0: f.y, x1: f.x, y1: f.y, add: ev.shiftKey }
+        renderer.setMarquee(marquee)
+        if (!ev.shiftKey) clearSelection()
+      }
       try { canvas.setPointerCapture(ev.pointerId) } catch {}
       return
+    }
+
+    // Selecting is an Edit-mode idea. In Play, a click still kills.
+    if (mode === 'edit') {
+      if (ev.shiftKey) select([n.id], { add: true })
+      else if (!selection.has(n.id)) select([n.id])
     }
     const { W, H } = renderer.size
     const f = renderer.toFrame(x, y)
@@ -278,6 +391,15 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       return
     }
 
+    if (marquee) {
+      const f = renderer.toFrame(x, y)
+      marquee.x1 = f.x
+      marquee.y1 = f.y
+      renderer.setMarquee(marquee)
+      canvas.style.cursor = 'crosshair'
+      return
+    }
+
     if (panning) {
       renderer.panBy(x - panning.x, y - panning.y)
       panning = { x, y }
@@ -308,15 +430,38 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const { H } = renderer.size
     const f = renderer.toFrame(x, y)
     const world = v => Math.max(WORLD_MIN, Math.min(WORLD_MAX, v))
+    const beforeX = drag.node.x, beforeY = drag.node.y
     drag.node.x = world(renderer.fromPx(f.x - drag.offX))
     drag.node.y = world((f.y - drag.offY) / H)
     const snapped = renderer.snapNode(drag.node, sim.state.nodes)
     drag.node.x = world(snapped.x)
     drag.node.y = world(snapped.y)
     writeBack(drag.node)
+
+    // Everything else selected moves by the same delta, so a group keeps its shape.
+    const dx = drag.node.x - beforeX, dy = drag.node.y - beforeY
+    if ((dx || dy) && selection.size > 1) {
+      for (const id of selection) {
+        if (id === drag.node.id) continue
+        const o = sim.byId(id)
+        if (!o) continue
+        o.x = world(o.x + dx)
+        o.y = world(o.y + dy)
+        writeBack(o)
+      }
+    }
   })
 
   function endDrag(ev) {
+    if (marquee) {
+      const caught = renderer.nodesInMarquee(sim.state.nodes).map(n => n.id)
+      if (caught.length) select(caught, { add: marquee.add })
+      marquee = null
+      renderer.setMarquee(null)
+      canvas.style.cursor = 'default'
+      try { canvas.releasePointerCapture(ev.pointerId) } catch {}
+      return
+    }
     if (secDrag) {
       secDrag = null
       canvas.style.cursor = 'default'
@@ -345,8 +490,8 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       return
     }
     if (!drag) return
-    if (!drag.moved) { sim.kill(drag.node.id); onStats(sim.state.stats) }
-    else renderer.fit(sim.state.nodes)
+    if (!drag.moved && mode === 'play') { sim.kill(drag.node.id); onStats(sim.state.stats) }
+    else renderer.fit(sim.state.nodes, !!timeline)
     renderer.clearGuides()
     canvas.style.cursor = 'grab'
     try { canvas.releasePointerCapture(ev.pointerId) } catch {}
@@ -390,7 +535,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       }
     }
     if (sim.state.scene.autoLayout) sim.autoLayout()
-    renderer.fit(sim.state.nodes)
+    renderer.fit(sim.state.nodes, !!timeline)
     onStats(sim.state.stats)
   })
 
@@ -405,7 +550,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const { W, H } = renderer.size
     mark()
     const n = sim.addNode(type, renderer.fromPx(f.x), f.y / H)
-    if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
+    if (n) { renderer.fit(sim.state.nodes, !!timeline); onStats(sim.state.stats) }
     else past.pop()
   })
 
@@ -421,6 +566,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     stop()
     ro.disconnect()
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('keyup', onKeyUp)
   }
 
   resize()
@@ -429,6 +575,8 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
     undo, redo, canUndo, canRedo, clearHistory,
+    setNodeProp, setMode, get mode() { return mode }, select, clearSelection,
+    get selection() { return [...selection] }, duplicateSelection,
     beginExport, stepFrame, endExport,
     resetCamera: () => renderer.resetCamera(),
     addSection: (label, x, y, w, h) => {
@@ -440,7 +588,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     addNode: (type, fx, fy) => {
       mark()
       const n = sim.addNode(type, fx, fy)
-      if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
+      if (n) { renderer.fit(sim.state.nodes, !!timeline); onStats(sim.state.stats) }
       return n
     },
     get timeline() { return timeline },

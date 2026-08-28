@@ -114,6 +114,13 @@ felt walled off. And `beginExport()` pins the camera to the frame and restores
 it afterwards, because otherwise panning before pressing record silently changed
 what the video contained.
 
+## Modes own gestures
+
+Edit and Play exist because one click cannot mean both "select" and "kill".
+Before adding any gesture, decide which mode owns it, and check it does not
+already belong to the other. Empty-space drag is selection in Edit and panning
+in Play; panning in Edit moved to space-and-drag.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second

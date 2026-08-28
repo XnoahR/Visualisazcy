@@ -35,6 +35,8 @@ export function createRenderer(canvas) {
   let hoverSection = null
   let pending = null
   let guides = []            // alignment lines shown while dragging
+  let selection = new Set()  // ids the editor has selected
+  let marquee = null         // { x0, y0, x1, y1 } in frame coords, while dragging one
 
   // Camera. Frame coordinates are what every scene is authored in — the export
   // bounds. The camera is a view transform on top, so at zoom 1 centred on the
@@ -144,7 +146,11 @@ export function createRenderer(canvas) {
   // Shrink until no two cards collide. Positions are fractions, so how much room
   // a layout actually has only becomes knowable once the canvas is sized — this
   // is what keeps a scene authored for 16:9 legible at 1:1.
-  function fit(nodes) {
+  // Only a composition shrinks to fit. A free board keeps its cards at full
+  // size and lets you zoom — objects that shrink as you add more is the wrong
+  // model for a canvas, and it is why nine objects made every icon unreadable.
+  function fit(nodes, compose = false) {
+    if (!compose) return
     const gap = 16
     const visible = nodes.filter(n => !n.hidden && inFrame(n))
     for (let i = 0; i < visible.length; i++) {
@@ -171,6 +177,52 @@ export function createRenderer(canvas) {
   function boxOf(n) {
     const w = C.w * S, h = C.h * S
     return { cx: toPx(n.x), cy: n.y * H, w, h, hw: w / 2, hh: h / 2 }
+  }
+
+  // A selected card wears a ring outside its border, so selection reads even on
+  // a card that is already red from being overloaded.
+  function paintSelection(boxes) {
+    if (!selection.size) return
+    ctx.save()
+    ctx.strokeStyle = theme.accent
+    ctx.lineWidth = 1.5 * S
+    for (const id of selection) {
+      const b = boxes.get(id)
+      if (!b) continue
+      roundRect(b.cx - b.hw - 5 * S, b.cy - b.hh - 5 * S,
+                b.w + 10 * S, b.h + 10 * S, (C.r + 5) * S)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  function paintMarquee() {
+    if (!marquee) return
+    const x = Math.min(marquee.x0, marquee.x1)
+    const y = Math.min(marquee.y0, marquee.y1)
+    const w = Math.abs(marquee.x1 - marquee.x0)
+    const h = Math.abs(marquee.y1 - marquee.y0)
+    ctx.save()
+    ctx.fillStyle = 'rgba(110,160,255,0.09)'
+    ctx.fillRect(x, y, w, h)
+    ctx.strokeStyle = theme.accent
+    ctx.lineWidth = 1 / cam.zoom
+    ctx.strokeRect(x, y, w, h)
+    ctx.restore()
+  }
+
+  // Which nodes a marquee has caught. Rectangle overlap, not containment —
+  // dragging a band across a row should take the whole row.
+  function nodesInMarquee(nodes) {
+    if (!marquee) return []
+    const x = Math.min(marquee.x0, marquee.x1), X = Math.max(marquee.x0, marquee.x1)
+    const y = Math.min(marquee.y0, marquee.y1), Y = Math.max(marquee.y0, marquee.y1)
+    return nodes.filter(n => {
+      if (n.hidden) return false
+      const b = boxOf(n)
+      return b.cx + b.hw >= x && b.cx - b.hw <= X &&
+             b.cy + b.hh >= y && b.cy - b.hh <= Y
+    })
   }
 
   // Snapping lives here because the renderer owns the geometry. Alignment with
@@ -444,7 +496,9 @@ export function createRenderer(canvas) {
       }
       paintChrome(chrome)
     }
+    paintSelection(boxes)
     paintGuides()
+    paintMarquee()
     if (pending) paintPending(boxes)
     ctx.restore()
   }
@@ -932,7 +986,9 @@ export function createRenderer(canvas) {
   resize()
   return {
     draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
-    snapNode, clearGuides,
+    snapNode, clearGuides, nodesInMarquee,
+    setSelection: set => { selection = set },
+    setMarquee: m => { marquee = m },
     toFrame, resetCamera, frameCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
     setHoverEdge: e => { hoverEdge = e },

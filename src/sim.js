@@ -432,6 +432,7 @@ export function createSim(sceneDef, opts = {}) {
       n.hits++
       state.stats.processed++
       state.stats.hits++
+      recordLatency(p.inSystem ?? 0)   // a hit is a finished request, just a fast one
       const idx = trail.length - 1
       if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true, p.bornAt, p.inSystem)
       return
@@ -470,7 +471,12 @@ export function createSim(sceneDef, opts = {}) {
       }
       const conc = concOf(n)
       while (n.inService.length < conc && n.queue.length) {
-        startService(n, n.queue.shift(), freedAt)
+        const next = n.queue.shift()
+        // The slot may have opened before this request even arrived. Starting
+        // its service at that earlier moment made doneAt precede arrivedAt and
+        // produced negative latencies, which is not a small error — it is time
+        // running backwards.
+        startService(n, next, Math.max(freedAt, next.arrivedAt ?? freedAt))
         freedAt = state.time                        // only the first inherits the slack
       }
     }
