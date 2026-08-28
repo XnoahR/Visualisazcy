@@ -46,8 +46,13 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   // The rAF loop hands the sim whatever dt the display gave it. Export needs the
   // opposite: a dt we choose, so the same clip renders identically anywhere.
 
+  let restoreCamera = null
+
   function beginExport() {
     stop()                       // take the rAF loop out of the way
+    // A recording must be the export frame, not whatever you were looking at.
+    // Without this, panning before pressing record silently changed the video.
+    restoreCamera = renderer.frameCamera()
     sim.reset({ replay: true })
     sim.state.running = true
     if (timeline) { timeline.restart(); timeline.state.playing = true }
@@ -63,6 +68,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   }
 
   function endExport() {
+    if (restoreCamera) { restoreCamera(); restoreCamera = null }
     sim.state.running = false
     if (timeline) timeline.state.playing = false
     onStats(sim.state.stats)

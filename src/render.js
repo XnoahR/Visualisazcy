@@ -52,11 +52,23 @@ export function createRenderer(canvas) {
     y: (sy - H / 2) / cam.zoom + cam.y,
   })
 
-  function resetCamera() {
+  // The resting view is slightly pulled back, so there is visible board around
+  // the export frame. At zoom 1 the canvas WAS the frame, which is why placing
+  // anything outside it felt walled off — there was nowhere visible to put it.
+  const REST_ZOOM = 0.78
+
+  function resetCamera(zoom = REST_ZOOM) {
     cam.x = W / 2
     cam.y = H / 2
-    cam.zoom = 1
+    cam.zoom = zoom
     camTouched = false
+  }
+
+  // Export ignores wherever you happen to be looking and renders the frame.
+  function frameCamera() {
+    const keep = { ...cam }
+    resetCamera(1)
+    return () => { cam.x = keep.x; cam.y = keep.y; cam.zoom = keep.zoom; camTouched = true }
   }
 
   function panBy(dxScreen, dyScreen) {
@@ -864,7 +876,7 @@ export function createRenderer(canvas) {
   resize()
   return {
     draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
-    toFrame, resetCamera, panBy, zoomAt,
+    toFrame, resetCamera, frameCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
     setHoverEdge: e => { hoverEdge = e },
     setHoverSection: id => { hoverSection = id },

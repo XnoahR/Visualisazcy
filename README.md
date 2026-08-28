@@ -245,6 +245,14 @@ A refused connection is not a step: the mark is popped back off.
 
 ## The board is bigger than the frame
 
+The resting view sits at zoom `0.78`, so there is visible board around the
+export frame. At zoom 1 the canvas *was* the frame, which is why placing
+anything outside it felt walled off — there was nowhere visible to put it.
+
+Recording pins the camera to the frame and restores it afterwards: a render is
+the export frame, never wherever you happened to be looking.
+
+
 ![off-canvas](docs/offcanvas.png)
 
 `0..1` is the **export frame**, not the world. Objects can be parked outside it:

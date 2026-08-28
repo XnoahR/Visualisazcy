@@ -94,6 +94,26 @@ work; every one of these looked fine.
 Icon-only controls carry `aria-label`, not only `title`. Focus is an explicit
 `:focus-visible` ring — the browser default is close to invisible on `#08090d`.
 
+## Cards are buttons, and buttons carry baggage
+
+`.tpl` and `.start-card` are `<button>`s, so they inherit the toolbar button
+base — including `white-space: nowrap` and `align-items: center`, both correct
+for a one-line control and both wrong for a card. Nowrap made every start-screen
+description render 365px wide inside a 287px card and collide with its
+neighbour; centring silently overrode `text-align: left`.
+
+Reset `white-space` and `align-items` explicitly on anything that borrows the
+button base for a non-button.
+
+## The camera is not the export frame
+
+They are separate things and conflating them caused two bugs at once. The
+resting camera sits at `0.78` so there is visible board around the frame —
+at zoom 1 the canvas *was* the frame, which is why placing anything outside it
+felt walled off. And `beginExport()` pins the camera to the frame and restores
+it afterwards, because otherwise panning before pressing record silently changed
+what the video contained.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second

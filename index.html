@@ -156,11 +156,17 @@
   .home-head p { font-size: 13.5px; line-height: 1.6; color: var(--dim); margin: 0; max-width: 560px; }
   .home-sec { display: flex; flex-direction: column; gap: 11px; }
   .home-start { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  /* These are <button>s, so they inherit the toolbar button base — which sets
+     white-space: nowrap and align-items: center for a one-line control. Both are
+     wrong for a card: nowrap made every description overflow its card by ~78px
+     and collide with the next one. Reset them explicitly. */
   .start-card, .tpl {
-    display: flex; flex-direction: column; gap: 5px; text-align: left; height: auto;
+    display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+    text-align: left; height: auto; white-space: normal;
     background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
     padding: 15px; cursor: pointer; transition: .13s; font-family: var(--display);
   }
+  .sc-d, .tpl-d, .now-d, .tip { overflow-wrap: anywhere; }
   .start-card:hover, .tpl:hover { border-color: rgba(110,160,255,.45); background: #171b25; }
   .sc-ico { color: var(--accent); margin-bottom: 4px; }
   .sc-t, .tpl-t { font-size: 13.5px; font-weight: 600; color: var(--text); }
@@ -474,13 +480,13 @@ for (const s of SCENES) {
   grid.appendChild(b)
 }
 
-function open(def) {
+function open(def, { keepHome = false } = {}) {
   current = def
   engine.load(def)
   $('caption').innerHTML =
     `<div class="now-t">${def.title}</div><div class="now-d">${def.caption || ''}</div>`
   for (const el of list.children) el.setAttribute('aria-pressed', String(el.dataset.id === def.id))
-  $('home').hidden = true
+  if (!keepHome) $('home').hidden = true
   if (editing) openEditor()
   requestAnimationFrame(sizeFrame)
   paint()
@@ -592,7 +598,10 @@ $('ed-text').addEventListener('input', () => {
 
 // keep In flight ticking even while idle
 setInterval(paint, 120)
-open(current)
+
+// Prime the first scene but stay on the start screen: opening straight into a
+// scene is what the start screen exists to avoid.
+open(current, { keepHome: true })
 </script>
 </body>
 </html>
