@@ -9,7 +9,7 @@
 // the meters actually display) is damped separately in advanceAnim, so easing
 // never distorts the numbers it is smoothing.
 
-import { typeOf, roleOf, connectionError, NODE_TYPES } from './registry.js'
+import { typeOf, roleOf, connectionError, NODE_TYPES, capacityOf } from './registry.js'
 import { placement } from './scene.js'
 import { damp, clamp01 } from './ease.js'
 
@@ -48,7 +48,7 @@ export function createSim(sceneDef, opts = {}) {
         x: at.x,
         y: at.y,
         rps: n.rps ?? DEFAULT_RPS,
-        capacity: n.capacity ?? typeOf(n).capacity,
+        get capacity() { return capacityOf(this) },
         label: n.label ?? typeOf(n).name,
         rxLog: [],
         overloaded: false,
@@ -66,9 +66,9 @@ export function createSim(sceneDef, opts = {}) {
         dimTarget: 0,
         // per-type behaviour
         tokens: typeOf(n).burst ?? 0,   // rate limiter bucket
-        busy: 0,                        // pooler: connections currently checked out
+        inService: [],                  // { p, doneAt } currently being served
+        queue: [],                      // waiting their turn
         hits: 0, misses: 0,             // cache
-        peakBusy: 0,
       }
   }
 
@@ -345,76 +345,110 @@ export function createSim(sceneDef, opts = {}) {
     while (n.rxLog.length && n.rxLog[0] <= cutoff) n.rxLog.shift()
   }
 
+  const concOf = n => n.spec.concurrency ?? typeOf(n).concurrency ?? 1
+  const latOf  = n => n.spec.latency ?? typeOf(n).latency ?? 0
+  const queueCapOf = n => n.spec.maxQueue ?? typeOf(n).maxQueue ?? 40
+
+  // ADMISSION. A request arriving at a busy node no longer vanishes or sails
+  // through — it waits. This is the whole point of modelling latency: capacity
+  // stops being a number that refuses things and becomes a consequence of how
+  // long each request takes and how many can be in flight at once.
   function arrive(p) {
     const n = byId(p.to)
     if (!n || n.dead || n.hidden) { state.stats.dropped++; return }
-
     const def = typeOf(n)
 
-    // Only requests consume capacity. Responses are already-paid-for work
-    // riding back down the trail, so counting them would double every meter.
-    if (p.dir === 1) {
-      const rate = record(n)
-      if (rate > n.capacity) {
-        n.overloaded = true
-        state.stats.dropped++
-        return
-      }
+    // Responses are work already paid for. They do not queue and do not occupy
+    // a server; counting them would double every meter.
+    if (p.dir !== 1) { n.pulse = 1; route(n, p); return }
 
-      // A rate limiter refuses by policy, not by exhaustion: it has capacity to
-      // spare and still says no, which is the entire point of one.
-      if (def.effect === 'bucket') {
-        if (n.tokens < 1) { n.overloaded = true; state.stats.dropped++; return }
-        n.tokens -= 1
-      }
+    record(n)
 
-      // A pooler owns a fixed set of connections. Run out and the request is
-      // refused even though the database behind it is idle.
-      if (def.effect === 'slots' && n.busy >= (def.slots || 8)) {
-        n.overloaded = true
-        state.stats.dropped++
-        return
-      }
-    } else if (def.effect === 'slots') {
-      n.busy = Math.max(0, n.busy - 1)   // the response hands its connection back
+    // A limiter refuses by policy while sitting idle, which is the entire point
+    // of one. That is a different thing from being busy, so it is checked first.
+    if ((n.spec.rateLimit ?? def.rateLimit) != null) {
+      if (n.tokens < 1) { n.overloaded = true; state.stats.dropped++; return }
+      n.tokens -= 1
     }
+
+    if (n.inService.length < concOf(n)) return startService(n, p)
+    if (n.queue.length < queueCapOf(n)) return void n.queue.push(p)
+
+    n.overloaded = true
+    state.stats.dropped++
+  }
+
+  // `from` is when the server actually became free, which is not the same as
+  // when we noticed. Completions are only checked once a frame, so without
+  // carrying that overshoot forward every request silently loses up to one
+  // frame of service time — a 25ms job measured as 33ms, and throughput
+  // landing at 27/s instead of the 40/s the numbers promise.
+  function startService(n, p, from = state.time) {
     n.pulse = 1
+    n.inService.push({ p, doneAt: from + latOf(n) })
+  }
 
-    if (p.dir === 1) {
-      const trail = [...p.trail, n.id]
-      const outs = liveTargets(n)
-
-      // A cache hit is the whole reason caches exist: the request turns around
-      // here and never touches what is behind it. Without this a cache was just
-      // a box that forwarded everything, which taught nothing.
-      const hitRate = n.spec.hitRate ?? def.hitRate
-      if (hitRate != null && Math.random() < hitRate && outs.length) {
-        n.hits++
-        state.stats.processed++
-        state.stats.hits++
-        const idx = trail.length - 1
-        if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true)
-        return
-      }
-      if (hitRate != null) n.misses++
-
-      if (roleOf(n) === 'sink' || outs.length === 0) {
-        // Terminal hop. Turn the request into a response and retrace.
-        state.stats.processed++
-        const idx = trail.length - 1
-        if (idx === 0) return
-        send(n.id, trail[idx - 1], -1, trail, idx - 1)
-      } else {
-        if (def.effect === 'slots') n.busy++
-        const next = outs[n.rrIdx++ % outs.length]   // round robin
-        send(n.id, next.id, 1, trail, 0)
-      }
+  // COMPLETION. Everything below used to run the instant a packet landed.
+  function route(n, p) {
+    // A response is retracing a path that was already counted on the way out.
+    // Falling through to the request logic below counts it a second time and
+    // sends it onward again — which is how 70 rps in produced 102 processed.
+    if (p.dir !== 1) {
+      if (p.idx <= 0) return
+      send(n.id, p.trail[p.idx - 1], -1, p.trail, p.idx - 1, p.hit)
       return
     }
 
-    // Response walking back down the forward trail.
-    if (p.idx <= 0) return
-    send(n.id, p.trail[p.idx - 1], -1, p.trail, p.idx - 1)
+    const def = typeOf(n)
+    const trail = [...p.trail, n.id]
+    const outs = liveTargets(n)
+
+    // A cache hit turns the request around here and never touches what is
+    // behind it. Without this a cache was a box that forwarded everything.
+    const hitRate = n.spec.hitRate ?? def.hitRate
+    if (hitRate != null && Math.random() < hitRate && outs.length) {
+      n.hits++
+      state.stats.processed++
+      state.stats.hits++
+      const idx = trail.length - 1
+      if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true)
+      return
+    }
+    if (hitRate != null) n.misses++
+
+    if (roleOf(n) === 'sink' || outs.length === 0) {
+      state.stats.processed++
+      const idx = trail.length - 1
+      if (idx === 0) return
+      send(n.id, trail[idx - 1], -1, trail, idx - 1)
+      return
+    }
+
+    const next = outs[n.rrIdx++ % outs.length]   // round robin
+    send(n.id, next.id, 1, trail, 0)
+  }
+
+  // Called every tick: finish what is due, then pull the next waiters in.
+  function serviceNodes() {
+    for (const n of state.nodes) {
+      if (!n.inService.length && !n.queue.length) continue
+      let freedAt = state.time
+      if (n.inService.length) {
+        const due = n.inService.filter(x => x.doneAt <= state.time)
+        if (due.length) {
+          n.inService = n.inService.filter(x => x.doneAt > state.time)
+          for (const x of due) {
+            freedAt = Math.min(freedAt, x.doneAt)   // earliest moment a slot opened
+            route(n, x.p)
+          }
+        }
+      }
+      const conc = concOf(n)
+      while (n.inService.length < conc && n.queue.length) {
+        startService(n, n.queue.shift(), freedAt)
+        freedAt = state.time                        // only the first inherits the slack
+      }
+    }
   }
 
   function step(dt) {
@@ -435,7 +469,10 @@ export function createSim(sceneDef, opts = {}) {
       }
     }
 
-    // 2. packets are a progress value
+    // 2. nodes finish what they were serving and admit whoever was waiting
+    serviceNodes()
+
+    // 3. packets are a progress value
     for (const p of state.packets) {
       if (!p.alive) continue
       p.progress += dt / p.dur
@@ -451,12 +488,12 @@ export function createSim(sceneDef, opts = {}) {
       n.tokens = Math.min(burst, n.tokens + n.capacity * dt / 1000)
     }
 
-    // 3. sliding window decides who is overloaded
+    // 4. a node is overloaded when its queue is full, not when a rate is high
     let hot = 0
     for (const n of state.nodes) {
       trim(n)
       const rate = n.rxLog.length * (1000 / WINDOW)
-      n.overloaded = !n.dead && !n.hidden && rate > n.capacity
+      n.overloaded = !n.dead && !n.hidden && n.queue.length >= queueCapOf(n)
       if (n.overloaded) hot++
     }
     state.stats.overloaded = hot
@@ -494,7 +531,8 @@ export function createSim(sceneDef, opts = {}) {
       n.dim = 0
       n.dimTarget = 0
       n.tokens = typeOf(n).burst ?? 0
-      n.busy = 0
+      n.inService = []
+      n.queue = []
       n.hits = 0
       n.misses = 0
       n.rps = n.spec.rps ?? DEFAULT_RPS

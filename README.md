@@ -21,6 +21,28 @@ python3 -m http.server 8123
 
 A server is required because the code uses ES modules; `file://` will not work.
 
+## Capacity is derived, not declared
+
+A node has a **latency** (how long one request takes) and a **concurrency** (how
+many it serves at once). Throughput follows:
+
+```
+throughput = concurrency ÷ latency
+```
+
+A server at 25ms with one worker sustains 40 rps. A database at 100ms with three
+connections sustains 30. Those were the numbers that used to be typed in by
+hand, and nothing you write can now contradict the physics — a node cannot claim
+1000 rps while taking a second per request.
+
+Requests arriving at a busy node **wait**. They queue until `maxQueue`, then they
+are refused. Overloaded means the queue is full, not that a counter crossed a
+line.
+
+A rate limiter is the one exception: its ceiling is a policy it applies while
+sitting idle, so it carries `rateLimit` on top of the physical model rather than
+instead of it. The physics say 1000 rps; the policy says 60.
+
 ## The model
 
 Three mechanics carry the whole thing:
