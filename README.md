@@ -131,6 +131,48 @@ the canvas is sized. Measured on the load balancer scene:
 | 1:1  | 618x618 | 0.70 | 118px | 67px |
 | 9:16 | 378x674 | 0.88 | 148px | 40px |
 
+## Annotations
+
+A card can only say what it is. An annotation says what to *notice* about it —
+the number that matters, the comparison, the sentence that lands. This layer is
+pure typography and geometry: no illustration involved, and it is what turns a
+diagram into an explanation.
+
+![annotations](docs/annotations.png)
+
+Marks are declared as data on a timeline step and anchor either to a node id (so
+they follow drags and relayouts) or to a fractional position:
+
+```js
+{
+  label: 'Traffic triples',
+  gutter: 0.33,                     // reserve the left third for commentary
+  focus: ['s1'],                    // dim everything else
+  annotations: [
+    { type: 'stat', at: [0.06, 0.24], value: 70, tone: 'bad',
+      label: 'arriving every second', key: 'in' },
+    { type: 'bar', at: [0.06, 0.53], label: 'the rest is dropped',
+      parts: [{ value: 40, tone: 'good' }, { value: 30, tone: 'bad' }] },
+    { type: 'callout', at: 'db', text: 'Every server you added ends here.' },
+    { type: 'bracket', nodes: ['s1','s2','s3'], text: 'three shares of 23' },
+    { type: 'note', at: [0.06, 0.72], text: 'Nothing crashed.' },
+  ],
+}
+```
+
+Three things make this layer work rather than merely exist:
+
+- **`gutter` reserves the left edge** and the diagram maps its fractional x into
+  what is left. Without it, commentary lands on cards. This is the layout
+  language the reference work uses: system on one side, argument on the other.
+- **Callouts choose their own side.** Right, left, below, above are scored by how
+  much they overlap other cards and the cheapest wins. A callout that covers a
+  node is worse than no callout, and which side is free depends on the topology.
+- **`stat` counts toward its value** instead of snapping, keyed per step so each
+  beat starts fresh.
+
+`focus` costs the author one array and is the cheapest way to aim the eye.
+
 ## Add a scene
 
 `scenes/index.js`:

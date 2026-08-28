@@ -59,6 +59,8 @@ export function createSim(sceneDef, opts = {}) {
         pulse: 0,         // 1 on arrival, decays
         showRate: 0,      // damped rps, what the meter and label actually show
         hot: 0,           // damped 0..1 overload blend, so the red fades in
+        dim: 0,           // damped 0..1; 1 means a step has focus elsewhere
+        dimTarget: 0,
       }
     })
     state.edges = def.edges.map(e => ({ ...e, off: false }))
@@ -234,6 +236,7 @@ export function createSim(sceneDef, opts = {}) {
       n.showRate = damp(n.showRate, measured, RATE_LAMBDA, dt)
       if (Math.abs(n.showRate - measured) < 0.05) n.showRate = measured
       n.hot = damp(n.hot, n.overloaded ? 1 : 0, 7, dt)
+      n.dim = damp(n.dim, n.dimTarget, 6, dt)
       if (n.pulse > 0) n.pulse = Math.max(0, n.pulse - dt / 300)
     }
   }
@@ -252,6 +255,8 @@ export function createSim(sceneDef, opts = {}) {
       n.pulse = 0
       n.showRate = 0
       n.hot = 0
+      n.dim = 0
+      n.dimTarget = 0
       n.rps = n.spec.rps ?? DEFAULT_RPS
     }
     if (replay) { state.animTime = 0; stageEntrance(0) }

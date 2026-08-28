@@ -28,7 +28,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       onStats(sim.state.stats)
     }
     sim.advanceAnim(dt)   // always: entrances and meters keep easing while paused
-    renderer.draw(sim, timeline ? timeline.chrome() : null)
+    renderer.draw(sim, timeline ? timeline.chrome() : null, dt)
     raf = requestAnimationFrame(frame)
   }
 
@@ -113,7 +113,8 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const { W, H } = renderer.size
     drag = {
       node: n, startX: x, startY: y, moved: false,
-      offX: x - n.x * W, offY: y - n.y * H,
+      offX: x - (renderer.gutter + n.x * (1 - renderer.gutter)) * W,
+      offY: y - n.y * H,
     }
     try { canvas.setPointerCapture(ev.pointerId) } catch {}
   })
@@ -130,7 +131,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     }
     if (!drag.moved) return
     const { W, H } = renderer.size
-    drag.node.x = clamp01((x - drag.offX) / W)
+    drag.node.x = clamp01(renderer.fromPx(x - drag.offX))
     drag.node.y = clamp01((y - drag.offY) / H)
     writeBack(drag.node)
   })

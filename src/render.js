@@ -4,11 +4,36 @@
 
 import { theme, card as C } from './theme.js'
 import { typeOf, roleOf } from './registry.js'
-import { easeOutBack, easeOutCubic, clamp01, mix } from './ease.js'
+import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
+import { drawAnnotations } from './annotate.js'
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d')
-  let W = 0, H = 0, S = 1
+  let W = 0, H = 0, S = 1, dt = 16
+
+  // A step can reserve the left edge for its annotations. The diagram then maps
+  // its fractional x into the remaining width instead of being drawn over. This
+  // is the layout language the reference work uses: commentary column on one
+  // side, system on the other.
+  let gutter = 0
+
+  // Numbers in annotations count toward their target instead of snapping. Values
+  // are keyed per step, so each beat starts its counters fresh.
+  const counterVals = new Map()
+  let counterEpoch = null
+  const counters = {
+    epoch(key) {
+      if (counterEpoch === key) return
+      counterEpoch = key
+      counterVals.clear()
+    },
+    read(key, target) {
+      const cur = counterVals.get(key) ?? 0
+      const next = damp(cur, target, 4.5, dt)
+      counterVals.set(key, Math.abs(next - target) < 0.5 ? target : next)
+      return counterVals.get(key)
+    },
+  }
 
   function resize() {
     const dpr = window.devicePixelRatio || 1
@@ -34,7 +59,7 @@ export function createRenderer(canvas) {
     const visible = nodes.filter(n => !n.hidden)
     for (let i = 0; i < visible.length; i++) {
       for (let j = i + 1; j < visible.length; j++) {
-        const dx = Math.abs(visible[i].x - visible[j].x) * W
+        const dx = Math.abs(visible[i].x - visible[j].x) * W * (1 - gutter)
         const dy = Math.abs(visible[i].y - visible[j].y) * H
         // The pair is clear if it separates on either axis; take the roomier one.
         const room = Math.max((dx - gap) / C.w, (dy - gap) / C.h)
@@ -44,14 +69,19 @@ export function createRenderer(canvas) {
   }
 
   // Pixel geometry for a node, derived from its fractional position.
+  const toPx = fx => (gutter + fx * (1 - gutter)) * W
+  const fromPx = px => (px / W - gutter) / (1 - gutter)
+
   function boxOf(n) {
     const w = C.w * S, h = C.h * S
-    const cx = clamp(n.x * W, w / 2 + 4, W - w / 2 - 4)
+    const cx = clamp(toPx(n.x), w / 2 + 4 + gutter * W, W - w / 2 - 4)
     const cy = clamp(n.y * H, h / 2 + 4, H - h / 2 - 4)
     return { cx, cy, w, h, hw: w / 2, hh: h / 2 }
   }
 
-  function draw(sim, chrome = null) {
+  function draw(sim, chrome = null, frameDt = 16) {
+    dt = frameDt
+    gutter = chrome?.gutter || 0
     const st = sim.state
     ctx.clearRect(0, 0, W, H)
     paintBackground()
@@ -64,7 +94,24 @@ export function createRenderer(canvas) {
       if (sim.appearOf(n) <= 0) continue
       paintCard(sim, n, boxes.get(n.id))
     }
-    if (chrome) paintChrome(chrome)
+    if (chrome) {
+      if (chrome.annotations) {
+        counters.epoch(chrome.key)
+        drawAnnotations(surface(boxes), chrome.annotations, chrome.enter, counters)
+      }
+      paintChrome(chrome)
+    }
+  }
+
+  // The drawing surface handed to the annotation layer: enough to place a mark
+  // against a node without letting it reach into renderer internals.
+  function surface(boxes) {
+    return {
+      ctx, S, W, H,
+      roundRect,
+      nodeBox: id => boxes.get(id) || null,
+      allBoxes: () => boxes.entries(),
+    }
   }
 
   // Frame furniture for timeline scenes: step label and narration top-left,
@@ -189,7 +236,8 @@ export function createRenderer(canvas) {
     const p2 = { x: mix(p1.x, full.x, reveal), y: mix(p1.y, full.y, reveal) }
 
     ctx.save()
-    ctx.globalAlpha = dead ? 0.22 : reveal
+    const faded = Math.max(na?.dim || 0, nb?.dim || 0)
+    ctx.globalAlpha = (dead ? 0.22 : reveal) * mix(1, 0.18, faded)
     ctx.strokeStyle = st.running ? theme.wireActive : theme.wire
     ctx.lineWidth = 1.5 * S
     ctx.lineCap = 'round'
@@ -253,7 +301,7 @@ export function createRenderer(canvas) {
     const lift = mix(10 * S, 0, easeOutCubic(enter))
 
     ctx.save()
-    ctx.globalAlpha = (n.dead ? 0.35 : 1) * easeOutCubic(enter)
+    ctx.globalAlpha = (n.dead ? 0.35 : 1) * easeOutCubic(enter) * mix(1, 0.2, n.dim)
     ctx.translate(cx, cy + lift)
     ctx.scale(scale, scale)
     ctx.translate(-cx, -cy)
@@ -394,7 +442,12 @@ export function createRenderer(canvas) {
   }
 
   resize()
-  return { draw, resize, fit, hitTest, get scale() { return S }, get size() { return { W, H } } }
+  return {
+    draw, resize, fit, hitTest, fromPx,
+    get scale() { return S },
+    get gutter() { return gutter },
+    get size() { return { W, H } },
+  }
 }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }

@@ -17,6 +17,7 @@ export function createTimeline(sim, def) {
     total: steps.length,
     playing: false,
     done: false,
+    appliedAt: 0,
   }
 
   function apply(i) {
@@ -37,6 +38,10 @@ export function createTimeline(sim, def) {
       // fall silent. Otherwise a source switched on in step 2 would still be
       // running in step 6 and nobody would have written that down.
       if (s.traffic) n.rps = s.traffic[n.id] ?? 0
+
+      // Focus dims everything the step is not talking about. Cheapest way to
+      // aim the viewer's eye, and it costs the scene author one array.
+      n.dimTarget = s.focus && !s.focus.includes(n.id) ? 1 : 0
     }
 
     // A step may narrow the topology to just the path it is talking about, so
@@ -48,6 +53,7 @@ export function createTimeline(sim, def) {
     }
 
     if (s.clearPackets) sim.state.packets = []
+    state.appliedAt = sim.state.animTime
   }
 
   function goTo(i) {
@@ -92,6 +98,11 @@ export function createTimeline(sim, def) {
       index: state.idx + 1,
       total: steps.length,
       progress: progress(),
+      annotations: s.annotations || null,
+      gutter: s.gutter || 0,
+      // seconds since this step landed, for annotation entrances
+      enter: (sim.state.animTime - state.appliedAt) / 1000,
+      key: state.idx,
     }
   }
 
