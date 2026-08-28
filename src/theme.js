@@ -11,7 +11,7 @@ export const theme = {
   // ink
   text:     '#f5f6fa',
   textDim:  '#9498ab',
-  textMute: '#5a5f74',
+  textMute: '#8087a0',   // 5.03:1 on --card; #5a5f74 measured 2.84:1 and failed AA
 
   // state
   accent: '#6ea0ff',

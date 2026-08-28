@@ -12,7 +12,7 @@
   :root {
     --bg: #08090d; --card: #14171f; --edge: rgba(255,255,255,0.055);
     --edge-hi: rgba(255,255,255,0.13); --text: #f5f6fa; --dim: #9498ab;
-    --mute: #5a5f74; --accent: #6ea0ff; --good: #6ee7b7; --warn: #fcd34d; --bad: #fca5a5;
+    --mute: #8087a0; --accent: #6ea0ff; --good: #6ee7b7; --warn: #fcd34d; --bad: #fca5a5;
     --display: "Space Grotesk", system-ui, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, monospace;
     --bar: 52px; --left: 236px; --right: 264px;
@@ -57,6 +57,8 @@
     background: rgba(110,160,255,0.15); border-color: rgba(110,160,255,0.45); color: var(--accent);
   }
   .icon { padding: 0; width: 30px; justify-content: center; font-size: 13px; }
+  /* The browser default ring is nearly invisible on #08090d. */
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
   .primary { color: var(--text); }
   .seg { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--edge); }
   .seg button { height: 24px; padding: 0 9px; font-size: 11px; border: 0; background: none; border-radius: 6px; }
@@ -141,7 +143,7 @@
     border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
     font-family: var(--mono); font-size: 11px; line-height: 1.6; tab-size: 2;
   }
-  #ed-text:focus { outline: none; border-color: rgba(110,160,255,.4); }
+  #ed-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .ed-errors { font-family: var(--mono); font-size: 10.5px; line-height: 1.7;
     color: var(--bad); margin-top: 9px; white-space: pre-wrap; max-height: 90px; overflow: auto; }
   .ed-errors:empty { display: none; }
@@ -210,7 +212,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7.3 11l9.4-4M7.3 13l9.4 4"/></svg>
       Visualizcy
     </span>
-    <button class="icon" id="home-btn" title="Back to the start screen">⌂</button>
+    <button class="icon" id="home-btn" aria-label="Back to the start screen" title="Back to the start screen">⌂</button>
 
     <div class="sep"></div>
     <div class="grp">
@@ -220,8 +222,8 @@
 
     <div class="sep"></div>
     <div class="grp">
-      <button class="icon" id="undo" title="Undo (Ctrl+Z)" disabled>↶</button>
-      <button class="icon" id="redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
+      <button class="icon" id="undo" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button class="icon" id="redo" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
     </div>
 
     <div class="sep"></div>
@@ -302,9 +304,9 @@
   <!-- only present when the scene has steps -->
   <div class="timeline" id="tl-panel" hidden>
     <span class="lbl">Story</span>
-    <button class="icon" id="tl-prev" title="Previous step">‹</button>
+    <button class="icon" id="tl-prev" aria-label="Previous step" title="Previous step">‹</button>
     <span class="tl-step" id="tl-step">1 / 1</span>
-    <button class="icon" id="tl-next" title="Next step">›</button>
+    <button class="icon" id="tl-next" aria-label="Next step" title="Next step">›</button>
     <span class="tl-label" id="tl-label"></span>
   </div>
 </div>

@@ -81,6 +81,19 @@ The stage scrolls when `--zoom` exceeds 1, so "bigger" genuinely means bigger.
 After any change to the frame's box, call `engine.resize()` on the next frame —
 the renderer caches `W`, `H` and the fit scale, and will not notice otherwise.
 
+## Contrast is measured, not judged
+
+`--mute` was `#5a5f74` and measured **2.84:1 on `--card`** — a fail, at the
+8.5-13.5px sizes it was actually used for. It is now `#8087a0`: 5.03 on card,
+5.45 on panel, 5.58 on bg.
+
+Before shipping a text colour, compute it against the darkest surface it lands
+on, which here is `--card` and not `--bg`. Eyeballing a dark palette does not
+work; every one of these looked fine.
+
+Icon-only controls carry `aria-label`, not only `title`. Focus is an explicit
+`:focus-visible` ring — the browser default is close to invisible on `#08090d`.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second
