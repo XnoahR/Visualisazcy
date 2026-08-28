@@ -17,6 +17,7 @@ const WINDOW = 1000        // ms; equal to 1s so rxLog.length reads as rps
 const DEFAULT_RPS = 6
 const SPEED = 0.55         // fractions of the canvas travelled per second
 const ENTER_MS = 460       // card entrance duration
+const EXIT_MS = 280        // and its way out; shorter, because leaving should not linger
 const ENTER_STEP = 105     // stagger between successive hops
 const RATE_LAMBDA = 5.5    // how hard the displayed rps chases the measured one
 
@@ -56,6 +57,7 @@ export function createSim(sceneDef, opts = {}) {
         rrIdx: 0,
         // presentation only
         appearAt: 0,      // animTime at which this card starts entering
+        exitAt: null,     // and at which it starts leaving, if it does
         pulse: 0,         // 1 on arrival, decays
         showRate: 0,      // damped rps, what the meter and label actually show
         hot: 0,           // damped 0..1 overload blend, so the red fades in
@@ -94,10 +96,63 @@ export function createSim(sceneDef, opts = {}) {
     }
   }
 
-  // 0..1 entrance progress for a card, raw; the renderer applies the curve.
+  // 0..1 visibility for a card, raw; the renderer applies the curve.
+  // Hiding is animated too: a node that vanishes on the frame a step changes
+  // reads as a cut, and a sequence of cuts is why stepping felt abrupt.
   function appearOf(n) {
-    if (n.hidden) return 0
-    return clamp01((state.animTime - n.appearAt) / ENTER_MS)
+    if (!n.hidden) return clamp01((state.animTime - n.appearAt) / ENTER_MS)
+    if (n.exitAt == null) return 0        // never shown in the first place
+    return 1 - clamp01((state.animTime - n.exitAt) / EXIT_MS)
+  }
+
+  // Lay the visible nodes out from the live edges instead of trusting positions
+  // authored for the full topology. A step that shows two of six nodes was
+  // otherwise using coordinates designed for six, which is why composition fell
+  // apart mid-story: the positions were static while visibility was not.
+  function autoLayout() {
+    const live = state.nodes.filter(n => !n.hidden)
+    if (!live.length) return
+    const ids = new Set(live.map(n => n.id))
+    const edges = state.edges.filter(e => !e.off && ids.has(e.from) && ids.has(e.to))
+
+    const depth = new Map()
+    const queue = []
+    for (const n of live) {
+      const hasIncoming = edges.some(e => e.to === n.id)
+      if (!hasIncoming) { depth.set(n.id, 0); queue.push(n.id) }
+    }
+    if (!queue.length) { depth.set(live[0].id, 0); queue.push(live[0].id) }
+    while (queue.length) {
+      const id = queue.shift()
+      for (const e of edges) {
+        if (e.from !== id) continue
+        const d = depth.get(id) + 1
+        if (depth.has(e.to) && depth.get(e.to) >= d) continue
+        depth.set(e.to, d)
+        queue.push(e.to)
+      }
+    }
+
+    const layers = new Map()
+    for (const n of live) {
+      const d = depth.get(n.id) ?? 0
+      if (!layers.has(d)) layers.set(d, [])
+      layers.get(d).push(n)
+    }
+    const maxDepth = Math.max(...layers.keys())
+
+    // Along the flow: left to right, or top to bottom in portrait.
+    const along = (d) => maxDepth === 0 ? 0.5 : 0.12 + (d / maxDepth) * 0.76
+    const across = (i, n) => n === 1 ? 0.5 : 0.16 + (i / (n - 1)) * 0.68
+
+    for (const [d, group] of layers) {
+      group.sort((a, b) => a.spec.y - b.spec.y || a.id.localeCompare(b.id))
+      group.forEach((n, i) => {
+        const a = along(d), c = across(i, group.length)
+        if (state.portrait) { n.x = c; n.y = a }
+        else { n.x = a; n.y = c }
+      })
+    }
   }
 
   // Reveal a node that was hidden, animating it in from now.
@@ -107,7 +162,8 @@ export function createSim(sceneDef, opts = {}) {
     const wantHidden = !on
     if (n.hidden === wantHidden) return
     n.hidden = wantHidden
-    if (on) n.appearAt = state.animTime
+    if (on) { n.appearAt = state.animTime; n.exitAt = null }
+    else n.exitAt = state.animTime
   }
 
   function relayout(portrait) {
@@ -250,6 +306,7 @@ export function createSim(sceneDef, opts = {}) {
       n.overloaded = false
       n.dead = false
       n.hidden = false
+      n.exitAt = null
       n.spawnAccum = 0
       n.rrIdx = 0
       n.pulse = 0
@@ -281,6 +338,6 @@ export function createSim(sceneDef, opts = {}) {
   load()
   return {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
-    appearOf, reveal, stageEntrance,
+    appearOf, reveal, stageEntrance, autoLayout,
   }
 }

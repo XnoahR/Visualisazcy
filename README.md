@@ -68,6 +68,10 @@ finishes its entrance, and a meter keeps settling after you hit pause.
 - **Entrances run in flow order.** A BFS from the sources assigns each node a
   depth, and depth becomes the stagger delay. Reading the diagram and watching it
   build are the same motion. Cards rise, overshoot slightly (`easeOutBack`), settle.
+- **Nodes animate out, not only in.** Hiding used to be instant, so every step
+  change was a cut and a sequence of cuts is what made stepping feel abrupt.
+  Exit is shorter than entrance (280ms vs 460ms) because leaving should not
+  linger.
 - **Wires draw themselves only as far as both endpoints have arrived**, so the
   topology assembles rather than snapping into place.
 - **`damp()` is the workhorse.** Frame-rate independent exponential smoothing,
@@ -118,6 +122,19 @@ See `scaleStory` in `scenes/index.js` for a six-step example.
 - **⧉** copies the current positions as scene data, ready to paste back into
   `scenes/index.js`. Drag to compose, copy, commit.
 
+## Layout
+
+Two things were static that should not have been.
+
+**Node positions.** A scene authors coordinates for its full topology, but a step
+shows a subset — so a step displaying two of six nodes was using positions
+designed for six, and the composition fell apart mid-story. `autoLayout: true`
+recomputes positions per step from the *live* edges: BFS assigns each visible
+node a depth, depth becomes the position along the flow, and siblings spread
+across it. Two nodes become a centred pair; six become four layers.
+
+**Annotation rhythm.** See above: marks without `at` stack on measured heights.
+
 ## Fitting any aspect
 
 Scale is driven by width, not `min(W, H)` — cards are wide, so horizontal room is
@@ -162,6 +179,9 @@ they follow drags and relayouts) or to a fractional position:
 
 Three things make this layer work rather than merely exist:
 
+- **Marks that omit `at` are stacked down the gutter** on spacing derived from
+  their own measured heights. Hand-picking a y per mark is how the column ended
+  up with arbitrary gaps; rhythm has to be computed, not chosen.
 - **`gutter` reserves the left edge** and the diagram maps its fractional x into
   what is left. Without it, commentary lands on cards. This is the layout
   language the reference work uses: system on one side, argument on the other.

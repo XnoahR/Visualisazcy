@@ -19,8 +19,12 @@ const toneOf = t => TONES[t] || theme.text
 
 export function drawAnnotations(s, list, enter, counters) {
   if (!list || !list.length) return
+  // Marks that omit `at` are stacked down the gutter on a shared rhythm. Hand
+  // picking a y for each one is how the left column ended up with arbitrary
+  // gaps: the spacing has to come from the marks' own heights, not from taste.
+  const stacked = stackColumn(s, list)
   for (let i = 0; i < list.length; i++) {
-    const a = list[i]
+    const a = stacked.get(list[i]) || list[i]
     // Marks stagger in after the step lands, so the eye gets the diagram first
     // and the commentary second.
     const t = easeOutCubic(clamp01((enter - i * 0.12) / 0.55))
@@ -33,6 +37,52 @@ export function drawAnnotations(s, list, enter, counters) {
     s.ctx.restore()
   }
 }
+
+// Vertical extent a mark occupies, and where its own anchor sits inside that.
+// stat and note draw from a text baseline; bar draws from its top edge.
+function metrics(s, a) {
+  const S = s.S
+  if (a.type === 'stat') {
+    const size = (a.size || 34) * S
+    return { height: size + (a.label ? 22 * S : 0), offset: size * 0.78 }
+  }
+  if (a.type === 'bar') {
+    return { height: (a.height || 6) * S + (a.label ? 24 * S : 0), offset: 0 }
+  }
+  if (a.type === 'note') {
+    s.ctx.font = `500 ${(a.size || 12.5) * S}px ${theme.fontDisplay}`
+    const lines = wrap(s.ctx, a.text, (a.width || 260) * S).length
+    return { height: lines * 17 * S, offset: 12 * S }
+  }
+  return { height: 22 * S, offset: 12 * S }
+}
+
+// Lay out every mark that did not ask for a position.
+function stackColumn(s, list) {
+  const auto = list.filter(a => a.at == null && a.type !== 'bracket' && a.type !== 'callout')
+  const out = new Map()
+  if (!auto.length) return out
+
+  const S = s.S
+  const x = 26 * S
+  const top = s.H * 0.30
+  const available = s.H * 0.58
+  const m = auto.map(a => metrics(s, a))
+  const content = m.reduce((n, q) => n + q.height, 0)
+  const gap = auto.length > 1
+    ? clamp01Range((available - content) / (auto.length - 1), 12 * S, 30 * S)
+    : 0
+
+  let y = top
+  auto.forEach((a, i) => {
+    // positions are fractions; the column is measured in pixels, so convert
+    out.set(a, { ...a, at: [x / s.W, (y + m[i].offset) / s.H] })
+    y += m[i].height + gap
+  })
+  return out
+}
+
+const clamp01Range = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 // Resolve an anchor: a node id, or [x, y] as fractions of the canvas.
 function anchor(s, at) {

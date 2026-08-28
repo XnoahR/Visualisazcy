@@ -88,6 +88,7 @@ export const SCENES = [request, overload, loadbalancer, replicas, queue]
 
 export const scaleStory = {
   id: 'scale_story',
+  autoLayout: true,   // positions come from the live edges of each step
   title: 'From one server to a bottleneck',
   caption: 'A six-step story. Use ‹ › to step through it by hand.',
   watermark: 'Visualizcy',
@@ -127,18 +128,19 @@ export const scaleStory = {
       traffic: { client: 70 },
       focus: ['s1'],
       annotations: [
-        { type: 'stat', at: [0.06, 0.24], value: 70, tone: 'bad', size: 38,
+        { type: 'stat', value: 70, tone: 'bad', size: 38,
           label: 'arriving every second', key: 'in' },
-        { type: 'stat', at: [0.06, 0.44], value: 40, tone: 'dim', size: 38,
+        { type: 'stat', value: 40, tone: 'dim', size: 38,
           label: 'it can actually take', key: 'cap' },
-        { type: 'bar', at: [0.06, 0.53], width: 200, label: 'the rest is dropped',
+        { type: 'bar', width: 200, label: 'the rest is dropped',
           parts: [{ value: 40, tone: 'good' }, { value: 30, tone: 'bad' }] },
-        { type: 'note', at: [0.06, 0.72], width: 210, tone: 'dim',
+        { type: 'note', width: 210, tone: 'dim',
           text: 'Nothing crashed. It just stopped answering thirty people a second.' },
       ],
     },
     {
       label: 'Spread the load',
+      gutter: 0.3,
       note: 'A load balancer and two more servers. The same seventy, now round-robined into three shares of twenty-three.',
       duration: 4600,
       show: ['client', 'lb', 's1', 's2', 's3'],
@@ -148,7 +150,7 @@ export const scaleStory = {
       annotations: [
         { type: 'bracket', nodes: ['s1', 's2', 's3'], tone: 'good',
           text: 'three shares of twenty-three' },
-        { type: 'note', at: [0.06, 0.82], width: 240, tone: 'dim',
+        { type: 'note', width: 240, tone: 'dim',
           text: 'Same seventy. Nobody is near their limit now.' },
       ],
     },
@@ -164,9 +166,9 @@ export const scaleStory = {
       annotations: [
         { type: 'callout', at: 's2', side: 'right', tone: 'bad', dy: 0,
           text: 'Gone. Its share is redistributed on the next request.' },
-        { type: 'stat', at: [0.06, 0.3], value: 35, tone: 'good', size: 34,
+        { type: 'stat', value: 35, tone: 'good', size: 34,
           label: 'each of the survivors', key: 'each' },
-        { type: 'note', at: [0.06, 0.46], width: 200, tone: 'dim',
+        { type: 'note', width: 200, tone: 'dim',
           text: 'Still under forty. Nobody outside notices anything happened.' },
       ],
     },
@@ -181,9 +183,9 @@ export const scaleStory = {
       dead: ['s2', 's3'],
       focus: ['client', 'lb', 's1'],
       annotations: [
-        { type: 'stat', at: [0.06, 0.3], value: 70, tone: 'bad', size: 38,
+        { type: 'stat', value: 70, tone: 'bad', size: 38,
           label: 'onto one server again', key: 'all' },
-        { type: 'note', at: [0.06, 0.46], width: 210, tone: 'dim',
+        { type: 'note', width: 210, tone: 'dim',
           text: 'This is step two wearing a load balancer. Spreading load buys you headroom, not immunity.' },
       ],
     },
@@ -200,7 +202,7 @@ export const scaleStory = {
       annotations: [
         { type: 'callout', at: 'db', side: 'left', tone: 'bad', width: 180,
           text: 'Thirty of capacity. Seventy arriving. Every server you added ends here.' },
-        { type: 'note', at: [0.06, 0.8], width: 230, tone: 'warn',
+        { type: 'note', width: 230, tone: 'warn',
           text: 'You can add servers all day. The bottleneck just moved.' },
       ],
     },
@@ -247,7 +249,7 @@ export const lru = scene({
       pointers: [{ at: 0, text: 'most recent' }, { at: 4, text: 'next to evict' }],
       gutter: 0.28,
       annotations: [
-        { type: 'note', at: [0.05, 0.42], width: 200, tone: 'dim',
+        { type: 'note', width: 200, tone: 'dim',
           text: 'Nothing has been evicted yet. A is simply the one with the most to lose.' },
       ],
     },
@@ -260,7 +262,7 @@ export const lru = scene({
       pointers: [{ at: 0, text: 'moved here' }, { at: 4, text: 'next to evict' }],
       gutter: 0.28,
       annotations: [
-        { type: 'note', at: [0.05, 0.42], width: 200, tone: 'dim',
+        { type: 'note', width: 200, tone: 'dim',
           text: 'This is the whole algorithm. Use something, and it stops being the candidate.' },
       ],
     },
@@ -273,9 +275,9 @@ export const lru = scene({
       pointers: [{ at: 0, text: 'new' }, { at: 4, text: 'next to evict' }],
       gutter: 0.28,
       annotations: [
-        { type: 'stat', at: [0.05, 0.36], value: 1, tone: 'bad', size: 34,
+        { type: 'stat', value: 1, tone: 'bad', size: 34,
           label: 'evicted: A', key: 'ev' },
-        { type: 'note', at: [0.05, 0.52], width: 200, tone: 'warn',
+        { type: 'note', width: 200, tone: 'warn',
           text: 'A was not the oldest thing you stored. It was the oldest thing you used.' },
       ],
     },

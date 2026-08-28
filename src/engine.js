@@ -82,6 +82,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   function resize() {
     renderer.resize()
     sim.relayout(isPortrait())
+    if (sim.state.scene.autoLayout) sim.autoLayout()
     renderer.fit(sim.state.nodes)
   }
 

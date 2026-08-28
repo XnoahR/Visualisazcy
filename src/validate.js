@@ -15,6 +15,7 @@ import { markTypes } from './annotate.js'
 const TONES = ['good', 'bad', 'warn', 'accent', 'dim', 'plain']
 const KINDS = ['graph', 'slots']
 const ROLES = ['source', 'router', 'sink']
+const STACKABLE = ['stat', 'bar', 'note']   // may omit `at` and be auto-stacked
 
 export function validateScene(def) {
   const errors = []
@@ -146,7 +147,13 @@ function validateSteps(def, kind, ids, err, warn) {
           if (!ids.has(id)) err(`${ap}.nodes`, `references unknown node "${id}"`)
         }
       } else if (a.at == null) {
-        err(`${ap}.at`, 'mark needs `at`: a node id, or [x, y] as fractions')
+        // stat, bar and note may omit `at`: they are stacked down the gutter on
+        // a shared rhythm instead of each picking its own y.
+        if (!STACKABLE.includes(a.type)) {
+          err(`${ap}.at`, `${a.type} needs \`at\`: a node id, or [x, y] as fractions`)
+        } else if (!s.gutter) {
+          warn(`${ap}.at`, `${a.type} will be stacked in the gutter, but this step sets no gutter`)
+        }
       } else if (Array.isArray(a.at)) {
         if (a.at.length !== 2) err(`${ap}.at`, 'positional `at` must be [x, y]')
       } else if (!ids.has(a.at)) {

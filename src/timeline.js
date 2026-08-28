@@ -52,6 +52,7 @@ export function createTimeline(sim, def) {
       for (const e of sim.state.edges) e.off = !on.has(`${e.from}>${e.to}`)
     }
 
+    if (def.autoLayout) sim.autoLayout()
     if (s.clearPackets) sim.state.packets = []
     state.appliedAt = sim.state.animTime
   }
