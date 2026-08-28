@@ -108,6 +108,29 @@ See `scaleStory` in `scenes/index.js` for a six-step example.
 
 ![timeline](docs/timeline.png)
 
+## Interaction
+
+- **Drag a node** to move it. Positions stay fractional, so the drag writes back
+  into the scene spec for whichever layout is on screen — rearrange at 9:16 and
+  the 16:9 layout is untouched.
+- **Click without dragging** to kill a node. One gesture, two meanings, split by
+  a 4px threshold so a shaky click still reads as a click.
+- **⧉** copies the current positions as scene data, ready to paste back into
+  `scenes/index.js`. Drag to compose, copy, commit.
+
+## Fitting any aspect
+
+Scale is driven by width, not `min(W, H)` — cards are wide, so horizontal room is
+what constrains them. Then `fit()` walks every visible pair and shrinks until
+nothing collides, because how much room a layout really has is only knowable once
+the canvas is sized. Measured on the load balancer scene:
+
+| Aspect | Canvas | Scale | Card | Tightest clearance |
+|---|---|---|---|---|
+| 16:9 | 904x508 | 1.03 | 173px | 78px |
+| 1:1  | 618x618 | 0.70 | 118px | 67px |
+| 9:16 | 378x674 | 0.88 | 148px | 40px |
+
 ## Add a scene
 
 `scenes/index.js`:
