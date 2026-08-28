@@ -70,6 +70,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     sim.state.running = false
     timeline = def.steps ? createTimeline(sim, def) : null
     renderer.fit(sim.state.nodes)
+    clearHistory()
     onStats(sim.state.stats)
   }
 
@@ -87,18 +88,78 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     renderer.fit(sim.state.nodes)
   }
 
+  function onKey(ev) {
+    const mod = ev.metaKey || ev.ctrlKey
+    if (!mod || ev.key.toLowerCase() !== 'z') return
+    const t = ev.target
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+    ev.preventDefault()
+    ev.shiftKey ? redo() : undo()
+  }
+  window.addEventListener('keydown', onKey)
+
   const ro = new ResizeObserver(resize)
   ro.observe(canvas)
 
   // One gesture, two meanings: press and release without moving is a kill,
   // press and drag repositions. The 4px threshold is what separates them, so a
   // slightly shaky click still reads as a click.
+  // --- undo -----------------------------------------------------------------
+  // mark() is called BEFORE a mutation, once per gesture: a drag marks at
+  // pointerdown, not on every move, so one drag is one undo step.
+  const past = []
+  const future = []
+  const HISTORY = 80
+
+  function mark() {
+    past.push(sim.snapshot())
+    if (past.length > HISTORY) past.shift()
+    future.length = 0
+    onHistory(canUndo(), canRedo())
+  }
+
+  const canUndo = () => past.length > 0
+  const canRedo = () => future.length > 0
+
+  function undo() {
+    if (!past.length) return false
+    future.push(sim.snapshot())
+    sim.restore(past.pop())
+    afterHistory()
+    return true
+  }
+
+  function redo() {
+    if (!future.length) return false
+    past.push(sim.snapshot())
+    sim.restore(future.pop())
+    afterHistory()
+    return true
+  }
+
+  function afterHistory() {
+    if (sim.state.scene.autoLayout) sim.autoLayout()
+    renderer.fit(sim.state.nodes)
+    renderer.setHover(null)
+    renderer.setHoverEdge(null)
+    renderer.setHoverSection(null)
+    onStats(sim.state.stats)
+    onHistory(canUndo(), canRedo())
+  }
+
+  function clearHistory() {
+    past.length = 0
+    future.length = 0
+    onHistory(false, false)
+  }
+
   const DRAG_SLOP = 4
   let drag = null
   let panning = null
   let wire = null
   let secDrag = null
   const onNotice = opts.onNotice || (() => {})
+  const onHistory = opts.onHistory || (() => {})
 
   const pointAt = ev => {
     const r = canvas.getBoundingClientRect()
@@ -132,6 +193,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       const sec = renderer.sectionHeadAt(sim, x, y)
       if (sec) {
         const f = renderer.toFrame(x, y)
+        mark()
         secDrag = { id: sec.id, fx: f.x, fy: f.y, moved: false }
         try { canvas.setPointerCapture(ev.pointerId) } catch {}
         return
@@ -143,6 +205,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     }
     const { W, H } = renderer.size
     const f = renderer.toFrame(x, y)
+    mark()
     drag = {
       node: n, startX: x, startY: y, moved: false,
       offX: f.x - (renderer.gutter + n.x * (1 - renderer.gutter)) * W,
@@ -189,15 +252,18 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     }
 
     if (!drag) {
-      const over = renderer.hitTest(sim, x, y)
+      // Hover uses the halo so the handles stay up while you reach for one;
+      // everything else still targets the card itself.
+      const over = renderer.hoverTargetAt(sim, x, y)
       renderer.setHover(over ? over.id : null)
       // Only arm a wire for deletion when nothing else is under the cursor.
+      const onCard = renderer.hitTest(sim, x, y)
       renderer.setHoverEdge(over || renderer.handleAt(sim, x, y)
         ? null : renderer.edgeHitTest(sim, x, y))
-      const head = over ? null : renderer.sectionHeadAt(sim, x, y)
+      const head = onCard ? null : renderer.sectionHeadAt(sim, x, y)
       renderer.setHoverSection(head ? head.id : null)
       canvas.style.cursor = renderer.handleAt(sim, x, y) ? 'crosshair'
-        : over || head ? 'grab' : 'default'
+        : onCard || head ? 'grab' : 'default'
       return
     }
     if (!drag.moved && Math.hypot(x - drag.startX, y - drag.startY) > DRAG_SLOP) {
@@ -223,8 +289,9 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       const { x, y } = pointAt(ev)
       const target = renderer.hitTest(sim, x, y)
       if (target) {
+        mark()
         const why = sim.connect(wire.from, target.id)
-        if (why) onNotice(why)
+        if (why) { past.pop(); onNotice(why) }   // a refused wire is not a step
         else onStats(sim.state.stats)
       }
       renderer.setPending(null)
@@ -265,17 +332,20 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const { x, y } = pointAt(ev)
     const node = renderer.hitTest(sim, x, y)
     if (node) {
+      mark()
       sim.removeNode(node.id)
       renderer.setHover(null)
     } else {
       const sec = renderer.sectionHeadAt(sim, x, y)
       if (sec) {
         // Removing the grouping never removes what was grouped.
+        mark()
         sim.removeSection(sec.id)
         renderer.setHoverSection(null)
       } else {
         const edge = renderer.edgeHitTest(sim, x, y)
         if (!edge) return
+        mark()
         sim.disconnect(edge.from, edge.to)
         renderer.setHoverEdge(null)
       }
@@ -294,8 +364,10 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const { x, y } = pointAt(ev)
     const f = renderer.toFrame(x, y)
     const { W, H } = renderer.size
+    mark()
     const n = sim.addNode(type, renderer.fromPx(f.x), f.y / H)
     if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
+    else past.pop()
   })
 
   // The fractional coordinates for whatever is currently on screen, ready to
@@ -309,6 +381,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   function destroy() {
     stop()
     ro.disconnect()
+    window.removeEventListener('keydown', onKey)
   }
 
   resize()
@@ -316,13 +389,16 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   return {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
+    undo, redo, canUndo, canRedo, clearHistory,
     resetCamera: () => renderer.resetCamera(),
     addSection: (label, x, y, w, h) => {
+      mark()
       const sec = sim.addSection(label, x, y, w, h)
       onStats(sim.state.stats)
       return sec
     },
     addNode: (type, fx, fy) => {
+      mark()
       const n = sim.addNode(type, fx, fy)
       if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }
       return n

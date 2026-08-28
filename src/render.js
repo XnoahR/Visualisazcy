@@ -327,6 +327,23 @@ export function createRenderer(canvas) {
     return Math.hypot(p.x - (a.x + vx * t), p.y - (a.y + vy * t))
   }
 
+  // Hover has to survive the cursor leaving the card on its way to a handle.
+  // The handles sit outside the card, so testing the card alone means reaching
+  // for a + is the gesture that dismisses it — the control is unusable.
+  function hoverTargetAt(sim, sx, sy) {
+    const direct = hitTest(sim, sx, sy)
+    if (direct) return direct
+    if (!hoverId) return null
+    const n = sim.byId(hoverId)
+    if (!n || n.hidden || !canGive(n)) return null
+    const p = toFrame(sx, sy)
+    const box = boxOf(n)
+    const pad = (13 + HANDLE_R + 7) * S     // handle offset + radius + slack
+    const inHalo = Math.abs(p.x - box.cx) <= box.hw + pad &&
+                   Math.abs(p.y - box.cy) <= box.hh + pad
+    return inHalo ? n : null
+  }
+
   // Which + handle is under a screen point, if any.
   function handleAt(sim, sx, sy) {
     if (!hoverId) return null
@@ -842,7 +859,7 @@ export function createRenderer(canvas) {
 
   resize()
   return {
-    draw, resize, fit, hitTest, fromPx, handleAt, edgeHitTest, sectionHeadAt,
+    draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
     toFrame, resetCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
     setHoverEdge: e => { hoverEdge = e },

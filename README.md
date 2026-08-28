@@ -129,6 +129,32 @@ real word says more than an ellipsis. Zoom in for the rest.
 
 ![sandbox](docs/sandbox.png)
 
+## Starting
+
+![start screen](docs/home.png)
+
+The app used to open straight into whichever scene came first, which left no way
+to begin from nothing. **Empty canvas** gives you a blank board; the grid below
+opens any scene. ⌂ returns.
+
+A blank board is a legitimate state, so the validator no longer treats an empty
+`nodes` array as an error — only nodes *without a source* still warn.
+
+## Undo
+
+Ctrl+Z / Ctrl+Shift+Z, or ↶ ↷. Snapshot-based rather than inverse commands: a
+board is small enough that copying it is cheap, and every mutation gets undo for
+free instead of each one needing a hand-written inverse to keep in step.
+
+Two properties worth knowing:
+
+- **One gesture is one step.** `mark()` runs at pointerdown, not on every move,
+  so an eight-move drag undoes once rather than eight times.
+- **Restore happens in place.** Surviving nodes keep their runtime state, so
+  undoing a wire change does not also reset the traffic flowing through it.
+
+A refused connection is not a step: the mark is popped back off.
+
 ## The palette
 
 ![palette](docs/palette.png)

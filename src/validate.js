@@ -83,9 +83,10 @@ export function validateScene(def) {
     }
   }
 
-  if (kind === 'graph') {
-    if (!nodes.length) err('nodes', 'a graph scene needs at least one node')
-    else if (!nodes.some(n => (n.role || NODE_TYPES[n.type]?.role) === 'source')) {
+  if (kind === 'graph' && nodes.length) {
+    // An empty board is where every new canvas starts, so emptiness is not an
+    // error. Having nodes but no source still is worth flagging.
+    if (!nodes.some(n => (n.role || NODE_TYPES[n.type]?.role) === 'source')) {
       warn('nodes', 'no source node, so nothing will ever emit traffic')
     }
   }

@@ -95,6 +95,59 @@ export function createSim(sceneDef, opts = {}) {
     return node
   }
 
+  // --- history --------------------------------------------------------------
+  // Undo works on snapshots rather than inverse commands. A board is small
+  // enough that copying it is cheap, and it means every mutation gets undo for
+  // free instead of each one needing a hand-written inverse to keep in step.
+  function snapshot() {
+    return JSON.stringify({
+      nodes: state.nodes.map(n => ({ ...n.spec, x: n.x, y: n.y })),
+      edges: state.edges.map(e => ({ from: e.from, to: e.to })),
+      sections: state.sections.map(x => ({
+        id: x.id, label: x.label, x: x.x, y: x.y, w: x.w, h: x.h, tone: x.tone ?? null,
+      })),
+    })
+  }
+
+  // Restores in place: surviving nodes keep their runtime state, so undoing a
+  // wire change does not also reset the traffic that was flowing through it.
+  function restore(json) {
+    const snap = JSON.parse(json)
+    const order = new Map(snap.nodes.map((n, i) => [n.id, i]))
+
+    state.nodes = state.nodes.filter(n => order.has(n.id))
+    for (const spec of snap.nodes) {
+      const found = byId(spec.id)
+      if (found) {
+        Object.assign(found.spec, spec)
+        found.x = spec.x
+        found.y = spec.y
+        found.rps = spec.rps ?? DEFAULT_RPS
+        found.capacity = spec.capacity ?? typeOf(found).capacity
+        found.label = spec.label ?? typeOf(found).name
+      } else {
+        const n = makeNode(spec)
+        n.appearAt = state.animTime
+        state.nodes.push(n)
+      }
+    }
+    state.nodes.sort((a, b) => order.get(a.id) - order.get(b.id))
+
+    state.edges = snap.edges.map(e => ({ ...e, off: false }))
+    state.sections = snap.sections.map(x => ({ ...x, spec: x }))
+    state.packets = state.packets.filter(p => byId(p.from) && byId(p.to))
+    syncScene()
+  }
+
+  // The scene definition is the thing the editor and the layout copy read, so
+  // it has to follow every structural change rather than only the ones that
+  // remembered to write through.
+  function syncScene() {
+    state.scene.nodes = state.nodes.map(n => n.spec)
+    state.scene.edges = state.edges.map(e => ({ from: e.from, to: e.to }))
+    state.scene.sections = state.sections.map(x => x.spec)
+  }
+
   // --- sections -------------------------------------------------------------
 
   // Whatever currently sits inside the rectangle. Recomputed on demand rather
@@ -487,5 +540,6 @@ export function createSim(sceneDef, opts = {}) {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
     addNode, removeNode, addSection, removeSection, moveSection, nodesIn,
+    snapshot, restore,
   }
 }

@@ -108,6 +108,19 @@ export const sandbox = scene({
   ],
 })
 
+// A fresh board. Built by a factory rather than exported as a constant so each
+// new canvas starts clean instead of inheriting whatever the last one became.
+let untitled = 0
+export function blankScene() {
+  untitled += 1
+  return scene({
+    id: `board_${Date.now().toString(36)}`,
+    title: untitled === 1 ? 'Untitled board' : `Untitled board ${untitled}`,
+    caption: 'Drag objects from the palette, wire them with the ＋ handles, then press play.',
+    nodes: [], edges: [], sections: [],
+  })
+}
+
 export const SCENES = [request, overload, loadbalancer, replicas, queue, sandbox]
 
 // ---------------------------------------------------------------------------
