@@ -43,6 +43,40 @@ A rate limiter is the one exception: its ceiling is a policy it applies while
 sitting idle, so it carries `rateLimit` on top of the physical model rather than
 instead of it. The physics say 1000 rps; the policy says 60.
 
+## Latency percentiles
+
+p50 and p99 measure **time in the system** — queueing plus service — not the time
+a dot spends flying across the screen. Travel duration is a rendering choice, and
+including it made p50 report 1433ms for 27ms of actual work.
+
+Measured on two scenes:
+
+| | service time | p50 | p99 |
+|---|---|---|---|
+| three servers, nothing queueing | 27ms (lb 2 + server 25) | **27ms** | 35ms |
+| one server taking 70 rps into 40 | 25ms | **658ms** | 1025ms |
+
+The first is exact. The second is the point of modelling queues at all: the
+request spends 96% of its life waiting rather than being served, and no counter
+alone can show that.
+
+## Declared facts
+
+`tech`, `storage`, `region`, `instances`, `cost` describe the architecture and
+change nothing in the simulation. They render in dim mono without a meter, so
+they never sit beside a measured number as if they were one. Mixing the two is
+how a diagram starts lying.
+
+The validator warns if a scene still sets `capacity` — it is derived now, and a
+value there would be silently ignored.
+
+## Snapping
+
+Dragging snaps to the 26px grid the canvas already draws, but **alignment with a
+neighbour wins**: lining two things up is a deliberate act, and a grid that
+overrides it feels like fighting the tool. Guides appear while dragging and clear
+on drop.
+
 ## The model
 
 Three mechanics carry the whole thing:

@@ -68,7 +68,7 @@ export const queue = scene({
   caption: 'The queue takes 10,000 rps without blinking. Workers drain it at 25 each.',
   nodes: [
     n('client', 'client', 0.1,  0.5,  { rps: 45, portrait: [0.5, 0.09] }),
-    n('api',    'server', 0.34, 0.5,  { role: 'router', label: 'API', capacity: 2000, portrait: [0.5, 0.3] }),
+    n('api',    'server', 0.34, 0.5,  { role: 'router', label: 'API', latency: 2, concurrency: 4, portrait: [0.5, 0.3] }),
     n('q',      'queue',  0.6,  0.5,  { portrait: [0.5, 0.52] }),
     n('w1',     'worker', 0.87, 0.32, { label: 'Worker 1', portrait: [0.29, 0.82] }),
     n('w2',     'worker', 0.87, 0.68, { label: 'Worker 2', portrait: [0.71, 0.82] }),
@@ -94,7 +94,7 @@ export const sandbox = scene({
     n('s1',      'server',    0.74, 0.28, { label: 'Server 1', role: 'router', portrait: [0.27, 0.7] }),
     n('s2',      'server',    0.74, 0.72, { label: 'Server 2', role: 'router', portrait: [0.73, 0.7] }),
     n('pool',    'pooler',    0.88, 0.5,  { portrait: [0.5, 0.85] }),
-    n('db',      'db',        0.97, 0.5,  { capacity: 60, portrait: [0.5, 0.95] }),
+    n('db',      'db',        0.97, 0.5,  { latency: 100, concurrency: 6, portrait: [0.5, 0.95] }),
   ],
   sections: [
     g('sec_edge', 'Edge',    0.19, 0.13, 0.32, 0.76, { tone: 'accent' }),
@@ -142,7 +142,7 @@ export const scaleStory = {
     n('s1',     'server', 0.63, 0.22, { role: 'router', label: 'Server 1', portrait: [0.28, 0.52] }),
     n('s2',     'server', 0.63, 0.5,  { role: 'router', label: 'Server 2', portrait: [0.5,  0.64] }),
     n('s3',     'server', 0.63, 0.78, { role: 'router', label: 'Server 3', portrait: [0.72, 0.52] }),
-    n('db',     'db',     0.88, 0.5,  { capacity: 30,     portrait: [0.5, 0.88] }),
+    n('db',     'db',     0.88, 0.5,  { portrait: [0.5, 0.88] }),
   ],
   edges: [
     e('client', 'lb'), e('client', 's1'),

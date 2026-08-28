@@ -3,7 +3,7 @@
 // packets are dots at a lerped position. That is the entire visual system.
 
 import { theme, card as C } from './theme.js'
-import { typeOf, roleOf, canGive } from './registry.js'
+import { typeOf, roleOf, canGive, declaredOf } from './registry.js'
 import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
 import { inFrame } from './scene.js'
 import { drawAnnotations } from './annotate.js'
@@ -34,6 +34,7 @@ export function createRenderer(canvas) {
   let hoverEdge = null
   let hoverSection = null
   let pending = null
+  let guides = []            // alignment lines shown while dragging
 
   // Camera. Frame coordinates are what every scene is authored in — the export
   // bounds. The camera is a view transform on top, so at zoom 1 centred on the
@@ -170,6 +171,52 @@ export function createRenderer(canvas) {
   function boxOf(n) {
     const w = C.w * S, h = C.h * S
     return { cx: toPx(n.x), cy: n.y * H, w, h, hw: w / 2, hh: h / 2 }
+  }
+
+  // Snapping lives here because the renderer owns the geometry. Alignment with
+  // a neighbour beats the grid: lining two things up is a deliberate act, and a
+  // grid that overrides it feels like fighting the tool.
+  const GRID = 26
+  const SNAP = 7
+
+  function snapNode(node, nodes) {
+    const gx = GRID * S, gy = GRID * S
+    let fx = toPx(node.x), fy = node.y * H
+    const found = []
+
+    let bestX = null, bestY = null
+    for (const o of nodes) {
+      if (o === node || o.hidden) continue
+      const ox = toPx(o.x), oy = o.y * H
+      if (Math.abs(ox - fx) < SNAP && (bestX === null || Math.abs(ox - fx) < Math.abs(bestX - fx))) bestX = ox
+      if (Math.abs(oy - fy) < SNAP && (bestY === null || Math.abs(oy - fy) < Math.abs(bestY - fy))) bestY = oy
+    }
+
+    if (bestX !== null) { fx = bestX; found.push({ axis: 'x', at: bestX }) }
+    else fx = Math.round(fx / gx) * gx
+    if (bestY !== null) { fy = bestY; found.push({ axis: 'y', at: bestY }) }
+    else fy = Math.round(fy / gy) * gy
+
+    guides = found
+    return { x: fromPx(fx), y: fy / H }
+  }
+
+  function clearGuides() { guides = [] }
+
+  function paintGuides() {
+    if (!guides.length) return
+    ctx.save()
+    ctx.strokeStyle = theme.accent
+    ctx.globalAlpha = 0.55
+    ctx.lineWidth = 1 / cam.zoom
+    ctx.setLineDash([4 / cam.zoom, 4 / cam.zoom])
+    for (const g of guides) {
+      ctx.beginPath()
+      if (g.axis === 'x') { ctx.moveTo(g.at, -H); ctx.lineTo(g.at, H * 2) }
+      else { ctx.moveTo(-W, g.at); ctx.lineTo(W * 2, g.at) }
+      ctx.stroke()
+    }
+    ctx.restore()
   }
 
   // A scene declares its kind; the kind decides how the body of the frame is
@@ -397,6 +444,7 @@ export function createRenderer(canvas) {
       }
       paintChrome(chrome)
     }
+    paintGuides()
     if (pending) paintPending(boxes)
     ctx.restore()
   }
@@ -796,9 +844,17 @@ export function createRenderer(canvas) {
       const cap = Number.isFinite(n.capacity) ? `/${n.capacity}` : ''
       ctx.fillText(`${Math.round(rate)}${cap} rps`, tx, cy + 8 * S)
     } else {
+      // Declared facts take the subtitle's place when present, in mono rather
+      // than the display face, so they never read as a measurement.
+      const declared = declaredOf(n)
       ctx.fillStyle = theme.textMute
-      ctx.font = `500 ${9.5 * S}px ${theme.fontDisplay}`
-      ctx.fillText(truncate(def.subtitle, tw), tx, cy + 8 * S)
+      if (declared.length) {
+        ctx.font = `500 ${9 * S}px ${theme.fontMono}`
+        ctx.fillText(truncate(declared.join(' · '), tw), tx, cy + 8 * S)
+      } else {
+        ctx.font = `500 ${9.5 * S}px ${theme.fontDisplay}`
+        ctx.fillText(truncate(def.subtitle, tw), tx, cy + 8 * S)
+      }
     }
 
     // load meter; stays up while the damped rate is still bleeding off so
@@ -876,12 +932,14 @@ export function createRenderer(canvas) {
   resize()
   return {
     draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
+    snapNode, clearGuides,
     toFrame, resetCamera, frameCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
     setHoverEdge: e => { hoverEdge = e },
     setHoverSection: id => { hoverSection = id },
     setPending: p => { pending = p },
     get camera() { return cam },
+    get guides() { return guides },
     get scale() { return S },
     get gutter() { return gutter },
     get size() { return { W, H } },

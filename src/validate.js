@@ -12,6 +12,7 @@
 import { NODE_TYPES } from './registry.js'
 import { markTypes } from './annotate.js'
 import { WORLD_MIN, WORLD_MAX } from './scene.js'
+import { DECLARED } from './registry.js'
 
 const TONES = ['good', 'bad', 'warn', 'accent', 'dim', 'plain']
 const KINDS = ['graph', 'slots', 'trace']
@@ -58,6 +59,17 @@ export function validateScene(def) {
     }
     if (n.x < 0 || n.x > 1 || n.y < 0 || n.y > 1) {
       warn(at, `"${n.id}" sits outside the export frame, so it will not appear in a render`)
+    }
+    for (const k of ['latency', 'concurrency', 'maxQueue', 'rateLimit']) {
+      if (n[k] != null && !(n[k] > 0)) err(`${at}.${k}`, `${k} must be a positive number`)
+    }
+    for (const k of DECLARED) {
+      if (n[k] != null && typeof n[k] !== 'string' && typeof n[k] !== 'number') {
+        err(`${at}.${k}`, `${k} is a declared fact; it must be a string or a number`)
+      }
+    }
+    if (n.capacity != null) {
+      warn(`${at}.capacity`, 'capacity is derived from latency and concurrency now; this value is ignored')
     }
     if (n.portrait && (!Array.isArray(n.portrait) || n.portrait.length !== 2)) {
       err(`${at}.portrait`, 'portrait must be [x, y]')

@@ -33,6 +33,7 @@ export function createSim(sceneDef, opts = {}) {
     animTime: 0,    // presentation clock; always advances
     portrait: !!opts.portrait,
     stats: { processed: 0, dropped: 0, overloaded: 0, hits: 0 },
+    latencies: [],
   }
 
   let seq = 0
@@ -93,6 +94,24 @@ export function createSim(sceneDef, opts = {}) {
     node.appearAt = state.animTime
     state.nodes.push(node)
     return node
+  }
+
+  // --- latency percentiles ---------------------------------------------------
+  // Queueing is what makes these worth having: without it every request took
+  // exactly as long as the wire, and a percentile said nothing.
+  const SAMPLES = 400
+  function recordLatency(ms) {
+    const a = state.latencies
+    a.push(ms)
+    if (a.length > SAMPLES) a.shift()
+  }
+
+  function percentile(p) {
+    const a = state.latencies
+    if (!a.length) return 0
+    const sorted = [...a].sort((x, y) => x - y)
+    const i = Math.min(sorted.length - 1, Math.floor(p * sorted.length))
+    return sorted[i]
   }
 
   // --- history --------------------------------------------------------------
@@ -320,13 +339,15 @@ export function createSim(sceneDef, opts = {}) {
       .filter(t => t && !t.dead && !t.hidden)
   }
 
-  function send(from, to, dir, trail, idx, hit = false) {
+  function send(from, to, dir, trail, idx, hit = false, bornAt = null, inSystem = 0) {
     const a = byId(from), b = byId(to)
     if (!a || !b) return
     const dist = Math.hypot(b.x - a.x, b.y - a.y)
     state.packets.push({
       id: ++seq,
       from, to, dir, trail, idx, hit,
+      bornAt: bornAt ?? state.time,   // set once, carried the whole way
+      inSystem,                       // queue + service time, excluding travel
       progress: 0,
       dur: Math.max(220, (dist / SPEED) * 1000),
       alive: true,
@@ -363,6 +384,7 @@ export function createSim(sceneDef, opts = {}) {
     if (p.dir !== 1) { n.pulse = 1; route(n, p); return }
 
     record(n)
+    p.arrivedAt = state.time      // for the queue-plus-service clock
 
     // A limiter refuses by policy while sitting idle, which is the entire point
     // of one. That is a different thing from being busy, so it is checked first.
@@ -395,7 +417,7 @@ export function createSim(sceneDef, opts = {}) {
     // sends it onward again — which is how 70 rps in produced 102 processed.
     if (p.dir !== 1) {
       if (p.idx <= 0) return
-      send(n.id, p.trail[p.idx - 1], -1, p.trail, p.idx - 1, p.hit)
+      send(n.id, p.trail[p.idx - 1], -1, p.trail, p.idx - 1, p.hit, p.bornAt, p.inSystem)
       return
     }
 
@@ -411,21 +433,22 @@ export function createSim(sceneDef, opts = {}) {
       state.stats.processed++
       state.stats.hits++
       const idx = trail.length - 1
-      if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true)
+      if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true, p.bornAt, p.inSystem)
       return
     }
     if (hitRate != null) n.misses++
 
     if (roleOf(n) === 'sink' || outs.length === 0) {
       state.stats.processed++
+      recordLatency(p.inSystem ?? 0)
       const idx = trail.length - 1
       if (idx === 0) return
-      send(n.id, trail[idx - 1], -1, trail, idx - 1)
+      send(n.id, trail[idx - 1], -1, trail, idx - 1, false, p.bornAt, p.inSystem)
       return
     }
 
     const next = outs[n.rrIdx++ % outs.length]   // round robin
-    send(n.id, next.id, 1, trail, 0)
+    send(n.id, next.id, 1, trail, 0, false, p.bornAt, p.inSystem)
   }
 
   // Called every tick: finish what is due, then pull the next waiters in.
@@ -439,6 +462,8 @@ export function createSim(sceneDef, opts = {}) {
           n.inService = n.inService.filter(x => x.doneAt > state.time)
           for (const x of due) {
             freedAt = Math.min(freedAt, x.doneAt)   // earliest moment a slot opened
+            const waited = x.doneAt - (x.p.arrivedAt ?? x.doneAt)
+            x.p.inSystem = (x.p.inSystem ?? 0) + waited
             route(n, x.p)
           }
         }
@@ -517,6 +542,7 @@ export function createSim(sceneDef, opts = {}) {
     state.packets = []
     state.time = 0
     state.stats = { processed: 0, dropped: 0, overloaded: 0, hits: 0 }
+    state.latencies = []
     for (const n of state.nodes) {
       n.rxLog = []
       n.overloaded = false
@@ -576,6 +602,7 @@ export function createSim(sceneDef, opts = {}) {
   load()
   return {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
+    percentile,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
     addNode, removeNode, addSection, removeSection, moveSection, nodesIn,
     snapshot, restore,

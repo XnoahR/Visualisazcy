@@ -310,6 +310,9 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     const world = v => Math.max(WORLD_MIN, Math.min(WORLD_MAX, v))
     drag.node.x = world(renderer.fromPx(f.x - drag.offX))
     drag.node.y = world((f.y - drag.offY) / H)
+    const snapped = renderer.snapNode(drag.node, sim.state.nodes)
+    drag.node.x = world(snapped.x)
+    drag.node.y = world(snapped.y)
     writeBack(drag.node)
   })
 
@@ -344,6 +347,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     if (!drag) return
     if (!drag.moved) { sim.kill(drag.node.id); onStats(sim.state.stats) }
     else renderer.fit(sim.state.nodes)
+    renderer.clearGuides()
     canvas.style.cursor = 'grab'
     try { canvas.releasePointerCapture(ev.pointerId) } catch {}
     drag = null

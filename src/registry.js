@@ -111,6 +111,21 @@ export function capacityOf(node) {
   return policy != null ? Math.min(physical, policy) : physical
 }
 
+// Declared facts. These describe the architecture but change nothing in the
+// simulation, so they are rendered differently — dim mono, no meter — and never
+// sit next to a measured number as if they were one. Mixing the two is how a
+// diagram starts lying.
+export const DECLARED = ['tech', 'storage', 'region', 'instances', 'cost']
+
+export function declaredOf(node) {
+  const out = []
+  for (const k of DECLARED) {
+    const v = node.spec?.[k] ?? typeOf(node)[k]
+    if (v != null && v !== '') out.push(String(v))
+  }
+  return out
+}
+
 export function typeOf(node) {
   const def = NODE_TYPES[node.type]
   if (!def) throw new Error(`unknown node type: ${node.type}`)

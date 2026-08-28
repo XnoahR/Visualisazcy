@@ -287,6 +287,8 @@
           <dt>Processed</dt>  <dd id="m-proc" style="color:var(--good)">0</dd>
           <dt>Dropped</dt>    <dd id="m-drop" style="color:var(--bad)">0</dd>
           <dt>Overloaded</dt> <dd id="m-over" style="color:var(--warn)">0</dd>
+          <dt>p50</dt>        <dd id="m-p50">—</dd>
+          <dt>p99</dt>        <dd id="m-p99">—</dd>
         </dl>
       </div>
 
@@ -371,6 +373,10 @@ function paint() {
   $('m-proc').textContent   = st.stats.processed
   $('m-drop').textContent   = st.stats.dropped
   $('m-over').textContent   = st.stats.overloaded
+  const p50 = engine.sim.percentile(0.50), p99 = engine.sim.percentile(0.99)
+  $('m-p50').textContent = p50 ? `${Math.round(p50)} ms` : '—'
+  $('m-p99').textContent = p99 ? `${Math.round(p99)} ms` : '—'
+  $('m-p99').style.color = p99 > p50 * 4 ? 'var(--warn)' : ''
   $('play').textContent     = st.running ? '❙❙ Pause' : '▶ Play'
   paintTimeline()
 }
