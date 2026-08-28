@@ -199,6 +199,7 @@
         <button id="sect" title="Add a section around the middle of the board">▢</button>
         <button id="undo" title="Undo (Ctrl+Z)" disabled>↶</button>
         <button id="redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
+        <button id="rec" title="Render this story to a video file">⏺</button>
       </div>
     </div>
 
@@ -260,9 +261,11 @@
 import { createEngine } from './src/engine.js'
 import { SCENES, blankScene } from './scenes/index.js'
 import { validateAll, validateScene } from './src/validate.js'
+import { record, download, supported as canRecord, clipLength } from './src/export.js'
 import { scene } from './src/scene.js'
 import { NODE_TYPES } from './src/registry.js'
 import './src/renderers/slots.js'   // self-registers the 'slots' kind
+import './src/renderers/trace.js'   // and the 'trace' kind
 
 const check = validateAll(SCENES)
 if (check.errors || check.warnings) {
@@ -320,6 +323,26 @@ $('tl-next').onclick = () => { engine.goToStep(engine.timeline.state.idx + 1); p
 
 $('play').onclick  = () => { engine.toggle(); paint() }
 $('reset').onclick = () => { engine.reset(); paint() }
+$('rec').onclick = async () => {
+  const btn = $('rec')
+  if (btn.dataset.busy) return
+  if (!canRecord()) { btn.textContent = 'n/a'; return }
+  btn.dataset.busy = '1'
+  try {
+    const blob = await record(engine, canvas, {
+      fps: 30,
+      onProgress: (i, n) => { btn.textContent = `${Math.round(i / n * 100)}%` },
+    })
+    const name = `${engine.state.scene.id}-${frame.dataset.aspect.replace(':', 'x')}.webm`
+    download(blob, name)
+    btn.textContent = '✓'
+  } catch (err) {
+    console.error(err)
+    btn.textContent = '!'
+  }
+  setTimeout(() => { btn.textContent = '⏺'; delete btn.dataset.busy; paint() }, 1600)
+}
+
 $('undo').onclick = () => { engine.undo(); paint() }
 $('redo').onclick = () => { engine.redo(); paint() }
 

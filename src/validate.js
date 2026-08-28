@@ -13,7 +13,7 @@ import { NODE_TYPES } from './registry.js'
 import { markTypes } from './annotate.js'
 
 const TONES = ['good', 'bad', 'warn', 'accent', 'dim', 'plain']
-const KINDS = ['graph', 'slots']
+const KINDS = ['graph', 'slots', 'trace']
 const ROLES = ['source', 'router', 'sink']
 const STACKABLE = ['stat', 'bar', 'note']   // may omit `at` and be auto-stacked
 
@@ -100,6 +100,24 @@ export function validateScene(def) {
       }
       if (!cfg.count && !def.steps?.some(s => s.cells?.length)) {
         err('slots.count', 'set slots.count, or give at least one step some cells')
+      }
+    }
+  }
+
+  if (kind === 'trace') {
+    if (!def.lanes?.length) err('lanes', 'a trace scene needs at least one lane')
+    for (const [i, l] of (def.lanes || []).entries()) {
+      const at = `lanes[${i}]`
+      if (!l.id) err(at, 'lane needs an id')
+      if (!l.points?.length) err(`${at}.points`, 'lane needs a points array')
+      if (l.tone && !TONES.includes(l.tone)) {
+        err(`${at}.tone`, `unknown tone "${l.tone}". known tones: ${TONES.join(', ')}`)
+      }
+    }
+    const laneIds = new Set((def.lanes || []).map(l => l.id))
+    for (const [i, st] of (def.steps || []).entries()) {
+      for (const id of st.lanes || []) {
+        if (!laneIds.has(id)) err(`steps[${i}].lanes`, `references unknown lane "${id}"`)
       }
     }
   }

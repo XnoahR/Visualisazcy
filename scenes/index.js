@@ -1,4 +1,5 @@
 import { scene, node as n, edge as e, section as g } from '../src/scene.js'
+import { captcha, captchaShort } from './captcha.js'
 
 // Positions are fractions of the canvas. `portrait` is the fallback layout used
 // when the canvas is taller than it is wide, which is what makes one scene
@@ -328,3 +329,5 @@ export const lru = scene({
 })
 
 SCENES.push(lru)
+SCENES.push(captcha)
+SCENES.push(captchaShort)

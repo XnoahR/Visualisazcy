@@ -41,6 +41,33 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     if (raf != null) { cancelAnimationFrame(raf); raf = null }
   }
 
+  // --- deterministic stepping, for export ------------------------------------
+  // The rAF loop hands the sim whatever dt the display gave it. Export needs the
+  // opposite: a dt we choose, so the same clip renders identically anywhere.
+
+  function beginExport() {
+    stop()                       // take the rAF loop out of the way
+    sim.reset({ replay: true })
+    sim.state.running = true
+    if (timeline) { timeline.restart(); timeline.state.playing = true }
+  }
+
+  function stepFrame(dt) {
+    if (sim.state.running) {
+      if (timeline) timeline.step(dt)
+      sim.step(dt)
+    }
+    sim.advanceAnim(dt)
+    renderer.draw(sim, timeline ? timeline.chrome() : null, dt)
+  }
+
+  function endExport() {
+    sim.state.running = false
+    if (timeline) timeline.state.playing = false
+    onStats(sim.state.stats)
+    start()                      // hand the loop back
+  }
+
   function play() {
     sim.state.running = true
     if (timeline) {
@@ -390,6 +417,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
     undo, redo, canUndo, canRedo, clearHistory,
+    beginExport, stepFrame, endExport,
     resetCamera: () => renderer.resetCamera(),
     addSection: (label, x, y, w, h) => {
       mark()

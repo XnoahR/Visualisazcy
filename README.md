@@ -129,6 +129,56 @@ real word says more than an ellipsis. Zoom in for the rest.
 
 ![sandbox](docs/sandbox.png)
 
+## Rendering a video
+
+⏺ renders the loaded story to a `.webm`.
+
+The mechanism is `captureStream(0)` — a manual-frame track, where nothing is
+captured until the code asks for it. That lets the engine be stepped by a
+**fixed dt per frame** instead of by the display's clock, so a slow machine
+produces the same video as a fast one. The calls are still paced in real time,
+because MediaRecorder timestamps by wall clock; export therefore takes about as
+long as the clip, while the content stays frame-exact.
+
+One gotcha worth knowing: because the frames are pushed manually, MediaRecorder
+writes a nonsense frame rate (ffprobe reads `1000/1`) and a duration a few
+percent short. The pictures are fine; the timing metadata is not. Forcing a
+constant rate on the way out fixes both:
+
+```bash
+./tools/to-mp4.sh captcha_short-9x16.webm
+```
+
+Measured on a 2s probe: 60 frames pushed in, 60 frames out, duration exactly
+2.000000 at 30/1.
+
+## Trace scenes
+
+`kind: 'trace'` draws measured paths rather than a topology, in a blueprint
+style — stroke instead of fill, dashed for containers and solid for the subject,
+depth from opacity rather than shadow, every label monospace and letter-spaced,
+two accents and no third. Those rules are the whole difference from the filled
+cards of the graph renderer; the engine needed nothing new.
+
+![trace](docs/trace.png)
+
+`scenes/captcha.js` uses it for what the "I am not a robot" checkbox actually
+reads. The two paths are **generated**, and every number shown is measured off
+them — nothing is typed in:
+
+| | path vs straight | direction changes | speed variation | time |
+|---|---|---|---|---|
+| A person | 1.285 | 75 | 1.392 | 1428 ms |
+| A script | 1.000 | 0 | 0.000 | 120 ms |
+
+The script's `1.000` and `0` are not round numbers chosen for effect — they are
+what a straight line at constant speed measures. That matters, because the claim
+of the piece is that the difference is visible in the trace, so the figures had
+better come out of the trace.
+
+Two cuts of the same material: a 31s lesson and a 9.5s reel. Same lanes, same
+measurements, different pacing.
+
 ## Starting
 
 ![start screen](docs/home.png)
