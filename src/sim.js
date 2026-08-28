@@ -9,7 +9,7 @@
 // the meters actually display) is damped separately in advanceAnim, so easing
 // never distorts the numbers it is smoothing.
 
-import { typeOf, roleOf } from './registry.js'
+import { typeOf, roleOf, connectionError } from './registry.js'
 import { placement } from './scene.js'
 import { damp, clamp01 } from './ease.js'
 
@@ -31,7 +31,7 @@ export function createSim(sceneDef, opts = {}) {
     time: 0,        // simulation clock; only advances while running
     animTime: 0,    // presentation clock; always advances
     portrait: !!opts.portrait,
-    stats: { processed: 0, dropped: 0, overloaded: 0 },
+    stats: { processed: 0, dropped: 0, overloaded: 0, hits: 0 },
   }
 
   let seq = 0
@@ -63,6 +63,11 @@ export function createSim(sceneDef, opts = {}) {
         hot: 0,           // damped 0..1 overload blend, so the red fades in
         dim: 0,           // damped 0..1; 1 means a step has focus elsewhere
         dimTarget: 0,
+        // per-type behaviour
+        tokens: typeOf(n).burst ?? 0,   // rate limiter bucket
+        busy: 0,                        // pooler: connections currently checked out
+        hits: 0, misses: 0,             // cache
+        peakBusy: 0,
       }
     })
     state.edges = (def.edges || []).map(e => ({ ...e, off: false }))
@@ -184,13 +189,13 @@ export function createSim(sceneDef, opts = {}) {
       .filter(t => t && !t.dead && !t.hidden)
   }
 
-  function send(from, to, dir, trail, idx) {
+  function send(from, to, dir, trail, idx, hit = false) {
     const a = byId(from), b = byId(to)
     if (!a || !b) return
     const dist = Math.hypot(b.x - a.x, b.y - a.y)
     state.packets.push({
       id: ++seq,
-      from, to, dir, trail, idx,
+      from, to, dir, trail, idx, hit,
       progress: 0,
       dur: Math.max(220, (dist / SPEED) * 1000),
       alive: true,
@@ -213,6 +218,8 @@ export function createSim(sceneDef, opts = {}) {
     const n = byId(p.to)
     if (!n || n.dead || n.hidden) { state.stats.dropped++; return }
 
+    const def = typeOf(n)
+
     // Only requests consume capacity. Responses are already-paid-for work
     // riding back down the trail, so counting them would double every meter.
     if (p.dir === 1) {
@@ -222,12 +229,44 @@ export function createSim(sceneDef, opts = {}) {
         state.stats.dropped++
         return
       }
+
+      // A rate limiter refuses by policy, not by exhaustion: it has capacity to
+      // spare and still says no, which is the entire point of one.
+      if (def.effect === 'bucket') {
+        if (n.tokens < 1) { n.overloaded = true; state.stats.dropped++; return }
+        n.tokens -= 1
+      }
+
+      // A pooler owns a fixed set of connections. Run out and the request is
+      // refused even though the database behind it is idle.
+      if (def.effect === 'slots' && n.busy >= (def.slots || 8)) {
+        n.overloaded = true
+        state.stats.dropped++
+        return
+      }
+    } else if (def.effect === 'slots') {
+      n.busy = Math.max(0, n.busy - 1)   // the response hands its connection back
     }
     n.pulse = 1
 
     if (p.dir === 1) {
       const trail = [...p.trail, n.id]
       const outs = liveTargets(n)
+
+      // A cache hit is the whole reason caches exist: the request turns around
+      // here and never touches what is behind it. Without this a cache was just
+      // a box that forwarded everything, which taught nothing.
+      const hitRate = n.spec.hitRate ?? def.hitRate
+      if (hitRate != null && Math.random() < hitRate && outs.length) {
+        n.hits++
+        state.stats.processed++
+        state.stats.hits++
+        const idx = trail.length - 1
+        if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true)
+        return
+      }
+      if (hitRate != null) n.misses++
+
       if (roleOf(n) === 'sink' || outs.length === 0) {
         // Terminal hop. Turn the request into a response and retrace.
         state.stats.processed++
@@ -235,6 +274,7 @@ export function createSim(sceneDef, opts = {}) {
         if (idx === 0) return
         send(n.id, trail[idx - 1], -1, trail, idx - 1)
       } else {
+        if (def.effect === 'slots') n.busy++
         const next = outs[n.rrIdx++ % outs.length]   // round robin
         send(n.id, next.id, 1, trail, 0)
       }
@@ -272,6 +312,14 @@ export function createSim(sceneDef, opts = {}) {
     }
     state.packets = state.packets.filter(p => p.alive)
 
+    // rate limiters refill continuously, which is what makes a burst possible
+    for (const n of state.nodes) {
+      const def = typeOf(n)
+      if (def.effect !== 'bucket') continue
+      const burst = def.burst || 20
+      n.tokens = Math.min(burst, n.tokens + n.capacity * dt / 1000)
+    }
+
     // 3. sliding window decides who is overloaded
     let hot = 0
     for (const n of state.nodes) {
@@ -300,7 +348,7 @@ export function createSim(sceneDef, opts = {}) {
   function reset({ replay = false } = {}) {
     state.packets = []
     state.time = 0
-    state.stats = { processed: 0, dropped: 0, overloaded: 0 }
+    state.stats = { processed: 0, dropped: 0, overloaded: 0, hits: 0 }
     for (const n of state.nodes) {
       n.rxLog = []
       n.overloaded = false
@@ -314,9 +362,27 @@ export function createSim(sceneDef, opts = {}) {
       n.hot = 0
       n.dim = 0
       n.dimTarget = 0
+      n.tokens = typeOf(n).burst ?? 0
+      n.busy = 0
+      n.hits = 0
+      n.misses = 0
       n.rps = n.spec.rps ?? DEFAULT_RPS
     }
     if (replay) { state.animTime = 0; stageEntrance(0) }
+  }
+
+  function connect(fromId, toId) {
+    const from = byId(fromId), to = byId(toId)
+    const why = connectionError(from, to, state.edges)
+    if (why) return why
+    state.edges.push({ from: fromId, to: toId, off: false })
+    if (state.scene.autoLayout) autoLayout()
+    return null
+  }
+
+  function disconnect(fromId, toId) {
+    state.edges = state.edges.filter(e => !(e.from === fromId && e.to === toId))
+    state.packets = state.packets.filter(p => !(p.from === fromId && p.to === toId))
   }
 
   function kill(id) {
@@ -338,6 +404,6 @@ export function createSim(sceneDef, opts = {}) {
   load()
   return {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
-    appearOf, reveal, stageEntrance, autoLayout,
+    appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
   }
 }

@@ -78,7 +78,32 @@ export const queue = scene({
   ],
 })
 
-export const SCENES = [request, overload, loadbalancer, replicas, queue]
+// A wide board to plug things together on. Drag from a + handle to connect;
+// only nodes that may give traffic show them.
+export const sandbox = scene({
+  id: 'sandbox',
+  title: 'Sandbox: plug things together',
+  caption: 'Drag to move, + to connect, wheel to zoom, drag empty space to pan.',
+  nodes: [
+    n('client',  'client',    0.09, 0.5,  { rps: 120, portrait: [0.5, 0.08] }),
+    n('gw',      'gateway',   0.26, 0.5,  { portrait: [0.5, 0.22] }),
+    n('rl',      'ratelimit', 0.42, 0.26, { portrait: [0.27, 0.38] }),
+    n('cache',   'cache',     0.42, 0.74, { portrait: [0.73, 0.38] }),
+    n('lb',      'lb',        0.58, 0.5,  { portrait: [0.5, 0.54] }),
+    n('s1',      'server',    0.74, 0.28, { label: 'Server 1', role: 'router', portrait: [0.27, 0.7] }),
+    n('s2',      'server',    0.74, 0.72, { label: 'Server 2', role: 'router', portrait: [0.73, 0.7] }),
+    n('pool',    'pooler',    0.88, 0.5,  { portrait: [0.5, 0.85] }),
+    n('db',      'db',        0.97, 0.5,  { capacity: 60, portrait: [0.5, 0.95] }),
+  ],
+  edges: [
+    e('client', 'gw'), e('gw', 'rl'), e('gw', 'cache'),
+    e('rl', 'lb'), e('cache', 'lb'),
+    e('lb', 's1'), e('lb', 's2'),
+    e('s1', 'pool'), e('s2', 'pool'), e('pool', 'db'),
+  ],
+})
+
+export const SCENES = [request, overload, loadbalancer, replicas, queue, sandbox]
 
 // ---------------------------------------------------------------------------
 // A timeline scene. The topology below holds every node the story will ever

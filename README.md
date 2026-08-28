@@ -112,6 +112,63 @@ See `scaleStory` in `scenes/index.js` for a six-step example.
 
 ![timeline](docs/timeline.png)
 
+## The canvas
+
+The camera is applied once as a canvas transform around the whole composition,
+so every painter keeps working in frame coordinates and the artboard zooms as
+one piece. At zoom 1 centred on the frame the output is pixel-identical to
+having no camera at all; zoom out and a dashed outline shows the export bounds.
+
+- **wheel** zooms about the cursor
+- **drag empty space** pans
+- **double-click** resets
+
+With many nodes the fit pass shrinks cards until they stop colliding, so labels
+fall back to a shorter registry name (`Load Balancer` → `Balancer`). A shorter
+real word says more than an ellipsis. Zoom in for the rest.
+
+![sandbox](docs/sandbox.png)
+
+## Plugging things together
+
+Drag from a **+** handle to wire one node to another. Handles only appear on
+nodes that may give traffic, so "this one is receive-only" is visible rather
+than a rule you discover by being refused.
+
+The rule is the `role` a scene already declares:
+
+| role | gives | receives |
+|---|---|---|
+| `source` | yes | no |
+| `router` | yes | yes |
+| `sink` | no | yes |
+
+A refused connection says why: *"Database only receives"*, *"Client only
+sends"*, *"a node cannot feed itself"*, *"already connected"*.
+
+## What each object does
+
+Types are not just colours. Several carry real behaviour that changes what the
+simulation produces:
+
+| type | behaviour | shown as |
+|---|---|---|
+| `cache`, `edge` | `hitRate` of requests turn around here and never touch what is behind | ratio ring, amber return packets |
+| `ratelimit` | token bucket, refills at `capacity`/sec up to `burst` | bucket level |
+| `pooler` | a fixed set of connections, checked out on the way in and returned on the way back | slot bars |
+| `lb`, `gateway`, `topic` | round robin across live targets | stepping dial |
+| `queue` | backlog against drain rate | depth bar |
+| `db`, `blob`, `search` | write pulse | disk rings |
+
+The cache one matters most: without it a cache was a box that forwarded
+everything, which taught nothing. Measured on the sandbox scene, an 0.8
+`hitRate` produced 153 hits against 38 misses — and 153 requests that never
+reached the database.
+
+The pooler produces the scenario worth showing: the database sits at 19 rps of
+60 while the system drops 128 requests, because the pool ran out of connections.
+Nothing downstream is overloaded. It is still broken.
+
 ## Interaction
 
 - **Drag a node** to move it. Positions stay fractional, so the drag writes back

@@ -3,12 +3,13 @@
 // packets are dots at a lerped position. That is the entire visual system.
 
 import { theme, card as C } from './theme.js'
-import { typeOf, roleOf } from './registry.js'
+import { typeOf, roleOf, canGive } from './registry.js'
 import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
 import { drawAnnotations } from './annotate.js'
 
 // Scene-kind registry. 'graph' is built in; anything else registers into it.
 const SCENE_KINDS = {}
+const HANDLE_R = 7
 
 export function registerRenderer(kind, fn) {
   SCENE_KINDS[kind] = fn
@@ -17,12 +18,58 @@ export function registerRenderer(kind, fn) {
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d')
   let W = 0, H = 0, S = 1, dt = 16
+  let Z = 1   // S times the camera zoom: the scale everything on a card uses
 
   // A step can reserve the left edge for its annotations. The diagram then maps
   // its fractional x into the remaining width instead of being drawn over. This
   // is the layout language the reference work uses: commentary column on one
   // side, system on the other.
   let gutter = 0
+
+  // Interaction state the renderer needs to draw: which node is under the
+  // cursor (so its + handles show) and any connection being dragged.
+  let hoverId = null
+  let pending = null
+
+  // Camera. Frame coordinates are what every scene is authored in — the export
+  // bounds. The camera is a view transform on top, so at zoom 1 centred on the
+  // frame the output is pixel-identical to having no camera at all, and zooming
+  // out simply reveals the room around it.
+  const cam = { x: 0, y: 0, zoom: 1 }
+  const ZOOM_MIN = 0.2, ZOOM_MAX = 4
+  let camTouched = false   // once the user moves the camera, stop re-centring it
+
+  const toScreen = (fx, fy) => ({
+    x: (fx - cam.x) * cam.zoom + W / 2,
+    y: (fy - cam.y) * cam.zoom + H / 2,
+  })
+  const toFrame = (sx, sy) => ({
+    x: (sx - W / 2) / cam.zoom + cam.x,
+    y: (sy - H / 2) / cam.zoom + cam.y,
+  })
+
+  function resetCamera() {
+    cam.x = W / 2
+    cam.y = H / 2
+    cam.zoom = 1
+    camTouched = false
+  }
+
+  function panBy(dxScreen, dyScreen) {
+    camTouched = true
+    cam.x -= dxScreen / cam.zoom
+    cam.y -= dyScreen / cam.zoom
+  }
+
+  // Zoom about a screen point, so the thing under the cursor stays put.
+  function zoomAt(sx, sy, factor) {
+    camTouched = true
+    const before = toFrame(sx, sy)
+    cam.zoom = clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX)
+    const after = toFrame(sx, sy)
+    cam.x += before.x - after.x
+    cam.y += before.y - after.y
+  }
 
   // Numbers in annotations count toward their target instead of snapping. Values
   // are keyed per step, so each beat starts its counters fresh.
@@ -74,6 +121,7 @@ export function createRenderer(canvas) {
     // A portrait layout is mostly a single column and can afford more per card.
     const portrait = H > W
     S = clamp(W / (portrait ? 430 : 880), 0.5, 1.35)
+    if (!camTouched) resetCamera()
   }
 
   // Shrink until no two cards collide. Positions are fractions, so how much room
@@ -97,6 +145,10 @@ export function createRenderer(canvas) {
   const toPx = fx => (gutter + fx * (1 - gutter)) * W
   const fromPx = px => (px / W - gutter) / (1 - gutter)
 
+  // Frame coordinates throughout. The camera is applied once as a canvas
+  // transform around the whole composition, so every painter below — cards,
+  // wires, packets, annotations, chrome — keeps working in the space it was
+  // written for and the artboard zooms as one piece.
   function boxOf(n) {
     const w = C.w * S, h = C.h * S
     const cx = clamp(toPx(n.x), w / 2 + 4 + gutter * W, W - w / 2 - 4)
@@ -117,7 +169,61 @@ export function createRenderer(canvas) {
       if (sim.appearOf(n) <= 0) continue
       paintCard(sim, n, boxes.get(n.id))
     }
+    // Handles last, so they sit above neighbouring cards.
+    for (const n of st.nodes) {
+      if (n.id !== hoverId || n.hidden) continue
+      if (!canGive(n) || sim.appearOf(n) < 1) continue
+      paintHandles(boxes.get(n.id))
+    }
     return boxes
+  }
+
+  // The + affordances. Only nodes that may give traffic get them, which is how
+  // "this one is receive-only" becomes visible rather than a rule you discover
+  // by being refused.
+  function paintHandles(box) {
+    if (!box) return
+    for (const h of handlePoints(box)) {
+      ctx.save()
+      ctx.fillStyle = theme.bg
+      ctx.strokeStyle = theme.accent
+      ctx.lineWidth = 1.2 * S
+      ctx.beginPath()
+      ctx.arc(h.x, h.y, HANDLE_R * S, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
+      ctx.strokeStyle = theme.accent
+      ctx.lineWidth = 1.4 * S
+      const k = 3.4 * S
+      ctx.beginPath()
+      ctx.moveTo(h.x - k, h.y); ctx.lineTo(h.x + k, h.y)
+      ctx.moveTo(h.x, h.y - k); ctx.lineTo(h.x, h.y + k)
+      ctx.stroke()
+      ctx.restore()
+    }
+  }
+
+  function handlePoints(box) {
+    const d = 13 * S
+    return [
+      { x: box.cx + box.hw + d, y: box.cy, side: 'right' },
+      { x: box.cx - box.hw - d, y: box.cy, side: 'left' },
+      { x: box.cx, y: box.cy - box.hh - d, side: 'top' },
+      { x: box.cx, y: box.cy + box.hh + d, side: 'bottom' },
+    ]
+  }
+
+  // Which + handle is under a screen point, if any.
+  function handleAt(sim, sx, sy) {
+    if (!hoverId) return null
+    const n = sim.byId(hoverId)
+    if (!n || !canGive(n)) return null
+    const p = toFrame(sx, sy)
+    const box = boxOf(n)
+    for (const h of handlePoints(box)) {
+      if (Math.hypot(p.x - h.x, p.y - h.y) <= (HANDLE_R + 4) * S) return { node: n, ...h }
+    }
+    return null
   }
 
   function draw(sim, chrome = null, frameDt = 16) {
@@ -126,6 +232,10 @@ export function createRenderer(canvas) {
     const st = sim.state
     ctx.clearRect(0, 0, W, H)
     paintBackground()
+
+    ctx.save()
+    applyCamera()
+    paintFrameEdge()
 
     // 'graph' stays a closure over this renderer's card painters; registered
     // kinds get the surface and draw whatever they like on it.
@@ -143,6 +253,46 @@ export function createRenderer(canvas) {
       }
       paintChrome(chrome)
     }
+    if (pending) paintPending(boxes)
+    ctx.restore()
+  }
+
+  function applyCamera() {
+    ctx.translate(W / 2, H / 2)
+    ctx.scale(cam.zoom, cam.zoom)
+    ctx.translate(-cam.x, -cam.y)
+  }
+
+  // The export bounds, visible only once you zoom out past them.
+  function paintFrameEdge() {
+    if (cam.zoom > 0.995 && Math.abs(cam.x - W / 2) < 1 && Math.abs(cam.y - H / 2) < 1) return
+    ctx.save()
+    ctx.strokeStyle = theme.cardEdgeHi
+    ctx.lineWidth = 1 / cam.zoom
+    ctx.setLineDash([6 / cam.zoom, 6 / cam.zoom])
+    ctx.strokeRect(0, 0, W, H)
+    ctx.restore()
+  }
+
+  // Rubber band while dragging a new connection out of a + handle.
+  function paintPending(boxes) {
+    const from = boxes.get(pending.from)
+    if (!from) return
+    const p1 = edgePoint(from, pending.x, pending.y)
+    ctx.save()
+    ctx.strokeStyle = pending.ok === false ? theme.bad : theme.accent
+    ctx.lineWidth = 1.6 * S
+    ctx.setLineDash([5 * S, 5 * S])
+    ctx.beginPath()
+    ctx.moveTo(p1.x, p1.y)
+    ctx.lineTo(pending.x, pending.y)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.beginPath()
+    ctx.arc(pending.x, pending.y, 3.5 * S, 0, Math.PI * 2)
+    ctx.fillStyle = pending.ok === false ? theme.bad : theme.accent
+    ctx.fill()
+    ctx.restore()
   }
 
   // The drawing surface handed to the annotation layer: enough to place a mark
@@ -156,6 +306,86 @@ export function createRenderer(canvas) {
       nodeBox: id => boxes.get(id) || null,
       allBoxes: () => boxes.entries(),
     }
+  }
+
+  // Per-type effect widget, drawn in a reserved strip on the right of a card.
+  // This is what makes a pooler read differently from a rate limiter rather
+  // than being the same box in another colour.
+  function paintEffect(def, n, x, y, w, h) {
+    const ew = 26 * S
+    const ex = x + w - 11 * S - ew
+    const cy = y + h / 2
+    const col = def.color
+    ctx.save()
+
+    if (def.effect === 'slots') {
+      const total = def.slots || 8
+      const used = Math.min(total, Math.round(n.busy))
+      const bh = Math.max(1.5 * S, (h - 26 * S) / total - 1.5 * S)
+      for (let i = 0; i < total; i++) {
+        ctx.fillStyle = i < used ? col : 'rgba(255,255,255,0.09)'
+        ctx.fillRect(ex, y + 13 * S + i * (bh + 1.5 * S), ew, bh)
+      }
+    } else if (def.effect === 'bucket') {
+      const burst = def.burst || 20
+      const frac = clamp(n.tokens / burst, 0, 1)
+      const bh = h - 24 * S
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'
+      roundRect(ex + ew / 2 - 4 * S, y + 12 * S, 8 * S, bh, 3 * S); ctx.fill()
+      ctx.fillStyle = frac < 0.15 ? theme.bad : col
+      const fh = Math.max(1.5 * S, bh * frac)
+      roundRect(ex + ew / 2 - 4 * S, y + 12 * S + bh - fh, 8 * S, fh, 3 * S); ctx.fill()
+    } else if (def.effect === 'hitrate' || def.effect === 'globe') {
+      const total = n.hits + n.misses
+      const frac = total ? n.hits / total : (n.spec.hitRate ?? def.hitRate ?? 0)
+      const r = 10 * S
+      ctx.lineWidth = 3 * S
+      ctx.strokeStyle = 'rgba(255,255,255,0.09)'
+      ctx.beginPath(); ctx.arc(ex + ew / 2, cy, r, 0, Math.PI * 2); ctx.stroke()
+      ctx.strokeStyle = theme.good
+      ctx.beginPath()
+      ctx.arc(ex + ew / 2, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2)
+      ctx.stroke()
+      ctx.fillStyle = theme.textDim
+      ctx.font = `600 ${7.5 * S}px ${theme.fontMono}`
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(`${Math.round(frac * 100)}`, ex + ew / 2, cy + 0.5 * S)
+    } else if (def.effect === 'depth') {
+      const bh = h - 24 * S
+      const frac = clamp(n.showRate / Math.max(1, n.capacity * 0.02), 0, 1)
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'
+      roundRect(ex + ew / 2 - 5 * S, y + 12 * S, 10 * S, bh, 3 * S); ctx.fill()
+      ctx.fillStyle = col
+      const fh = Math.max(1.5 * S, bh * frac)
+      roundRect(ex + ew / 2 - 5 * S, y + 12 * S + bh - fh, 10 * S, fh, 3 * S); ctx.fill()
+    } else if (def.effect === 'rr' || def.effect === 'fan') {
+      // a tick that steps round the dial as the round robin advances
+      const r = 9 * S
+      const a = (n.rrIdx % 8) / 8 * Math.PI * 2 - Math.PI / 2
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+      ctx.lineWidth = 1.2 * S
+      ctx.beginPath(); ctx.arc(ex + ew / 2, cy, r, 0, Math.PI * 2); ctx.stroke()
+      ctx.strokeStyle = col
+      ctx.lineWidth = 2.2 * S
+      ctx.beginPath()
+      ctx.moveTo(ex + ew / 2, cy)
+      ctx.lineTo(ex + ew / 2 + Math.cos(a) * r, cy + Math.sin(a) * r)
+      ctx.stroke()
+    } else if (def.effect === 'disk') {
+      const r = 9 * S
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+      ctx.lineWidth = 1.2 * S
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.arc(ex + ew / 2, cy, r - i * 3.2 * S, 0, Math.PI * 2); ctx.stroke()
+      }
+      if (n.pulse > 0.02) {
+        ctx.strokeStyle = col
+        ctx.globalAlpha *= n.pulse
+        ctx.lineWidth = 2 * S
+        ctx.beginPath(); ctx.arc(ex + ew / 2, cy, r * (1 + (1 - n.pulse) * 0.5), 0, Math.PI * 2); ctx.stroke()
+      }
+    }
+    ctx.restore()
   }
 
   // Frame furniture for timeline scenes: step label and narration top-left,
@@ -319,7 +549,7 @@ export function createRenderer(canvas) {
     const y = p1.y + (p2.y - p1.y) * p.progress
     const edge = clamp01(Math.min(p.progress, 1 - p.progress) / 0.11)
     const grow = mix(0.5, 1, easeOutCubic(edge))
-    const color = p.dir === 1 ? theme.accent : theme.good
+    const color = p.dir === 1 ? theme.accent : p.hit ? theme.warn : theme.good
 
     ctx.save()
     ctx.globalAlpha = mix(0.35, 1, easeOutCubic(edge))
@@ -399,11 +629,15 @@ export function createRenderer(canvas) {
 
     // text block
     const tx = bx + bs + 10 * S
-    const tw = x + w - C.pad * S - tx
+    const hasEffect = !!def.effect && sim.state.running
+    const tw = x + w - C.pad * S - tx - (hasEffect ? 34 * S : 0)
     ctx.textAlign = 'left'
     ctx.fillStyle = theme.text
     ctx.font = `600 ${12.5 * S}px ${theme.fontDisplay}`
-    ctx.fillText(truncate(n.label, tw), tx, cy - 7 * S)
+    // Below a certain card size the full name cannot fit, and an ellipsis says
+    // less than a shorter real word does.
+    const label = (S < 0.82 && !n.spec.label && def.short) ? def.short : n.label
+    ctx.fillText(truncate(label, tw), tx, cy - 7 * S)
 
     if (sim.state.running && roleOf(n) !== 'source') {
       ctx.fillStyle = n.hot > 0.5 ? theme.bad : theme.textDim
@@ -431,6 +665,8 @@ export function createRenderer(canvas) {
       ctx.fill()
     }
 
+    if (hasEffect) paintEffect(def, n, x, y, w, h)
+
     // Drawn inside the card transform so it rides the entrance with everything
     // else rather than floating at the untransformed position.
     if (n.dead) {
@@ -446,7 +682,8 @@ export function createRenderer(canvas) {
     ctx.restore()
   }
 
-  function hitTest(sim, px, py) {
+  function hitTest(sim, sx, py0) {
+    const { x: px, y: py } = toFrame(sx, py0)
     for (const n of sim.state.nodes) {
       const b = boxOf(n)
       if (Math.abs(px - b.cx) <= b.hw && Math.abs(py - b.cy) <= b.hh) return n
@@ -487,7 +724,11 @@ export function createRenderer(canvas) {
 
   resize()
   return {
-    draw, resize, fit, hitTest, fromPx,
+    draw, resize, fit, hitTest, fromPx, handleAt,
+    toFrame, resetCamera, panBy, zoomAt,
+    setHover: id => { hoverId = id },
+    setPending: p => { pending = p },
+    get camera() { return cam },
     get scale() { return S },
     get gutter() { return gutter },
     get size() { return { W, H } },

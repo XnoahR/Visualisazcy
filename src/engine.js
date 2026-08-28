@@ -4,6 +4,7 @@ import { createSim } from './sim.js'
 import { createRenderer } from './render.js'
 import { createTimeline } from './timeline.js'
 import { clamp01 } from './ease.js'
+import { connectionError } from './registry.js'
 
 export function createEngine(canvas, sceneDef, opts = {}) {
   const renderer = createRenderer(canvas)
@@ -94,6 +95,9 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   // slightly shaky click still reads as a click.
   const DRAG_SLOP = 4
   let drag = null
+  let panning = null
+  let wire = null
+  const onNotice = opts.onNotice || (() => {})
 
   const pointAt = ev => {
     const r = canvas.getBoundingClientRect()
@@ -109,21 +113,62 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
   canvas.addEventListener('pointerdown', ev => {
     const { x, y } = pointAt(ev)
+
+    // A + handle wins over the card under it, so grabbing a handle never starts
+    // a move by accident.
+    const handle = renderer.handleAt(sim, x, y)
+    if (handle) {
+      const f = renderer.toFrame(x, y)
+      wire = { from: handle.node.id, x: f.x, y: f.y, ok: null }
+      renderer.setPending(wire)
+      try { canvas.setPointerCapture(ev.pointerId) } catch {}
+      return
+    }
+
     const n = renderer.hitTest(sim, x, y)
-    if (!n) return
+    if (!n) {
+      // Empty space pans the camera, the way any canvas tool behaves.
+      panning = { x, y }
+      try { canvas.setPointerCapture(ev.pointerId) } catch {}
+      return
+    }
     const { W, H } = renderer.size
+    const f = renderer.toFrame(x, y)
     drag = {
       node: n, startX: x, startY: y, moved: false,
-      offX: x - (renderer.gutter + n.x * (1 - renderer.gutter)) * W,
-      offY: y - n.y * H,
+      offX: f.x - (renderer.gutter + n.x * (1 - renderer.gutter)) * W,
+      offY: f.y - n.y * H,
     }
     try { canvas.setPointerCapture(ev.pointerId) } catch {}
   })
 
   canvas.addEventListener('pointermove', ev => {
     const { x, y } = pointAt(ev)
+
+    if (wire) {
+      const f = renderer.toFrame(x, y)
+      wire.x = f.x
+      wire.y = f.y
+      const target = renderer.hitTest(sim, x, y)
+      wire.ok = target
+        ? !connectionError(sim.byId(wire.from), target, sim.state.edges)
+        : null
+      canvas.style.cursor = wire.ok === false ? 'not-allowed' : 'crosshair'
+      return
+    }
+
+    if (panning) {
+      renderer.panBy(x - panning.x, y - panning.y)
+      panning = { x, y }
+      canvas.style.cursor = 'grabbing'
+      return
+    }
+
     if (!drag) {
-      canvas.style.cursor = renderer.hitTest(sim, x, y) ? 'grab' : 'default'
+      const over = renderer.hitTest(sim, x, y)
+      renderer.setHover(over ? over.id : null)
+      canvas.style.cursor = renderer.handleAt(sim, x, y) ? 'crosshair'
+        : over ? 'grab' : 'default'
       return
     }
     if (!drag.moved && Math.hypot(x - drag.startX, y - drag.startY) > DRAG_SLOP) {
@@ -131,13 +176,34 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       canvas.style.cursor = 'grabbing'
     }
     if (!drag.moved) return
-    const { W, H } = renderer.size
-    drag.node.x = clamp01(renderer.fromPx(x - drag.offX))
-    drag.node.y = clamp01((y - drag.offY) / H)
+    const { H } = renderer.size
+    const f = renderer.toFrame(x, y)
+    drag.node.x = clamp01(renderer.fromPx(f.x - drag.offX))
+    drag.node.y = clamp01((f.y - drag.offY) / H)
     writeBack(drag.node)
   })
 
   function endDrag(ev) {
+    if (wire) {
+      const { x, y } = pointAt(ev)
+      const target = renderer.hitTest(sim, x, y)
+      if (target) {
+        const why = sim.connect(wire.from, target.id)
+        if (why) onNotice(why)
+        else onStats(sim.state.stats)
+      }
+      renderer.setPending(null)
+      wire = null
+      canvas.style.cursor = 'default'
+      try { canvas.releasePointerCapture(ev.pointerId) } catch {}
+      return
+    }
+    if (panning) {
+      panning = null
+      canvas.style.cursor = 'default'
+      try { canvas.releasePointerCapture(ev.pointerId) } catch {}
+      return
+    }
     if (!drag) return
     if (!drag.moved) { sim.kill(drag.node.id); onStats(sim.state.stats) }
     else renderer.fit(sim.state.nodes)
@@ -148,6 +214,14 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
   canvas.addEventListener('pointerup', endDrag)
   canvas.addEventListener('pointercancel', endDrag)
+
+  canvas.addEventListener('wheel', ev => {
+    ev.preventDefault()
+    const { x, y } = pointAt(ev)
+    renderer.zoomAt(x, y, ev.deltaY < 0 ? 1.12 : 1 / 1.12)
+  }, { passive: false })
+
+  canvas.addEventListener('dblclick', () => renderer.resetCamera())
 
   // The fractional coordinates for whatever is currently on screen, ready to
   // paste back into a scene file.
@@ -167,6 +241,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   return {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
+    resetCamera: () => renderer.resetCamera(),
     get timeline() { return timeline },
   }
 }
