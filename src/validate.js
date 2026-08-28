@@ -64,6 +64,25 @@ export function validateScene(def) {
     if (e.from === e.to) err(`edges[${i}]`, `edge points at itself ("${e.from}")`)
   }
 
+  const secIds = new Set()
+  for (const [i, x] of (def.sections || []).entries()) {
+    const at = `sections[${i}]`
+    if (!x.id) err(at, 'section needs an id')
+    else if (secIds.has(x.id)) err(at, `duplicate section id "${x.id}"`)
+    secIds.add(x.id)
+    if (!x.label) warn(`${at}.label`, 'section has no label, so its title strip is blank')
+    for (const f of ['x', 'y', 'w', 'h']) {
+      if (typeof x[f] !== 'number') err(`${at}.${f}`, `${f} must be a number`)
+      else if (x[f] < 0 || x[f] > 1) {
+        err(`${at}.${f}`, `${f} is ${x[f]}; sections are fractions of the canvas, so 0..1`)
+      }
+    }
+    if (x.w <= 0 || x.h <= 0) err(at, 'a section needs a positive width and height')
+    if (x.tone && !TONES.includes(x.tone)) {
+      err(`${at}.tone`, `unknown tone "${x.tone}". known tones: ${TONES.join(', ')}`)
+    }
+  }
+
   if (kind === 'graph') {
     if (!nodes.length) err('nodes', 'a graph scene needs at least one node')
     else if (!nodes.some(n => (n.role || NODE_TYPES[n.type]?.role) === 'source')) {

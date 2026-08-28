@@ -26,6 +26,7 @@ export function createSim(sceneDef, opts = {}) {
     scene: sceneDef,
     nodes: [],
     edges: [],
+    sections: [],
     packets: [],
     running: false,
     time: 0,        // simulation clock; only advances while running
@@ -75,6 +76,7 @@ export function createSim(sceneDef, opts = {}) {
     state.scene = def
     state.nodes = (def.nodes || []).map(makeNode)
     state.edges = (def.edges || []).map(e => ({ ...e, off: false }))
+    state.sections = (def.sections || []).map(x => ({ ...x, spec: x }))
     reset()
     stageEntrance(state.animTime)
   }
@@ -91,6 +93,52 @@ export function createSim(sceneDef, opts = {}) {
     node.appearAt = state.animTime
     state.nodes.push(node)
     return node
+  }
+
+  // --- sections -------------------------------------------------------------
+
+  // Whatever currently sits inside the rectangle. Recomputed on demand rather
+  // than stored, so dragging a node in or out just works.
+  function nodesIn(sec) {
+    return state.nodes.filter(n =>
+      !n.hidden && n.x >= sec.x && n.x <= sec.x + sec.w &&
+                   n.y >= sec.y && n.y <= sec.y + sec.h)
+  }
+
+  function addSection(label, x, y, w, h) {
+    let id = 'section', i = 1
+    while (state.sections.some(s2 => s2.id === id)) id = `section${++i}`
+    const spec = { id, label: label || 'Section', x, y, w, h }
+    if (!state.scene.sections) state.scene.sections = []
+    state.scene.sections.push(spec)
+    const sec = { ...spec, spec }
+    state.sections.push(sec)
+    return sec
+  }
+
+  function removeSection(id) {
+    state.sections = state.sections.filter(s2 => s2.id !== id)
+    if (state.scene.sections) {
+      state.scene.sections = state.scene.sections.filter(s2 => s2.id !== id)
+    }
+  }
+
+  // Moving a section carries its contents. That is the whole point of grouping,
+  // and it is why membership is resolved before the move, not after.
+  function moveSection(id, dx, dy) {
+    const sec = state.sections.find(s2 => s2.id === id)
+    if (!sec) return
+    const carried = nodesIn(sec)
+    sec.x = clamp01(sec.x + dx)
+    sec.y = clamp01(sec.y + dy)
+    sec.spec.x = sec.x
+    sec.spec.y = sec.y
+    for (const n of carried) {
+      n.x = clamp01(n.x + dx)
+      n.y = clamp01(n.y + dy)
+      if (state.portrait) n.spec.portrait = [n.x, n.y]
+      else { n.spec.x = n.x; n.spec.y = n.y }
+    }
   }
 
   function removeNode(id) {
@@ -438,6 +486,6 @@ export function createSim(sceneDef, opts = {}) {
   return {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
-    addNode, removeNode,
+    addNode, removeNode, addSection, removeSection, moveSection, nodesIn,
   }
 }

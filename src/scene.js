@@ -19,17 +19,26 @@ export function edge(from, to) {
   return { from, to }
 }
 
+// A section is a labelled rectangle behind the nodes — grouping, nothing more.
+// Membership is geometric: whatever sits inside the rectangle belongs to it.
+// That is how a canvas tool behaves, and it means there is no membership list
+// to drift out of sync with where things actually are.
+export function section(id, label, x, y, w, h, opts = {}) {
+  return { id, label, x, y, w, h, tone: opts.tone ?? null }
+}
+
 // nodes/edges are optional: a slots scene has neither, and the simulation
 // simply has nothing to run.
 export function scene(def) {
   const nodes = def.nodes || []
   const edges = def.edges || []
+  const sections = def.sections || []
   const ids = new Set(nodes.map(n => n.id))
   for (const e of edges) {
     if (!ids.has(e.from)) throw new Error(`${def.id}: edge from unknown node "${e.from}"`)
     if (!ids.has(e.to))   throw new Error(`${def.id}: edge to unknown node "${e.to}"`)
   }
-  return { ...def, nodes, edges }
+  return { ...def, nodes, edges, sections }
 }
 
 // Resolve a node's fractional position for the current canvas shape.

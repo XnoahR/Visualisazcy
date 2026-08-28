@@ -1,4 +1,4 @@
-import { scene, node as n, edge as e } from '../src/scene.js'
+import { scene, node as n, edge as e, section as g } from '../src/scene.js'
 
 // Positions are fractions of the canvas. `portrait` is the fallback layout used
 // when the canvas is taller than it is wide, which is what makes one scene
@@ -94,6 +94,11 @@ export const sandbox = scene({
     n('s2',      'server',    0.74, 0.72, { label: 'Server 2', role: 'router', portrait: [0.73, 0.7] }),
     n('pool',    'pooler',    0.88, 0.5,  { portrait: [0.5, 0.85] }),
     n('db',      'db',        0.97, 0.5,  { capacity: 60, portrait: [0.5, 0.95] }),
+  ],
+  sections: [
+    g('sec_edge', 'Edge',    0.19, 0.13, 0.32, 0.76, { tone: 'accent' }),
+    g('sec_app',  'App tier', 0.53, 0.13, 0.28, 0.76, { tone: 'good' }),
+    g('sec_data', 'Data',     0.82, 0.13, 0.16, 0.76, { tone: 'warn' }),
   ],
   edges: [
     e('client', 'gw'), e('gw', 'rl'), e('gw', 'cache'),

@@ -10,6 +10,7 @@ import { drawAnnotations } from './annotate.js'
 // Scene-kind registry. 'graph' is built in; anything else registers into it.
 const SCENE_KINDS = {}
 const HANDLE_R = 7
+const SECTION_HEAD = 24
 
 export function registerRenderer(kind, fn) {
   SCENE_KINDS[kind] = fn
@@ -30,6 +31,7 @@ export function createRenderer(canvas) {
   // cursor (so its + handles show) and any connection being dragged.
   let hoverId = null
   let hoverEdge = null
+  let hoverSection = null
   let pending = null
 
   // Camera. Frame coordinates are what every scene is authored in — the export
@@ -163,6 +165,7 @@ export function createRenderer(canvas) {
   // vocabulary costs one function, not a second engine.
   function drawGraph(surf, sim) {
     const st = sim.state
+    for (const sec of st.sections || []) paintSection(sim, sec)
     const boxes = new Map(st.nodes.map(n => [n.id, boxOf(n)]))
     for (const e of st.edges) paintWire(sim, boxes, e)
     for (const p of st.packets) paintPacket(sim, boxes, p)
@@ -177,6 +180,89 @@ export function createRenderer(canvas) {
       paintHandles(boxes.get(n.id))
     }
     return boxes
+  }
+
+  // Sections sit behind everything: a tinted rectangle and a title strip. The
+  // strip is the drag handle — grabbing the body would fight panning and node
+  // selection, which is the mistake every canvas tool only makes once.
+  function paintSection(sim, sec) {
+    const r = sectionRect(sec)
+    const tone = sec.tone ? (theme[sec.tone] || theme.accent) : null
+    const armed = hoverSection === sec.id
+
+    // Fade with the contents, so focus dims a section along with its nodes.
+    const inside = sim.nodesIn(sec)
+    const dim = inside.length
+      ? inside.reduce((m, n) => Math.min(m, 1 - n.dim), 1)
+      : 1
+
+    ctx.save()
+    ctx.globalAlpha = mix(0.25, 1, dim)
+
+    ctx.fillStyle = tone ? withAlpha(tone, 0.05) : 'rgba(255,255,255,0.016)'
+    roundRect(r.x, r.y, r.w, r.h, 14 * S)
+    ctx.fill()
+    ctx.strokeStyle = armed ? theme.cardEdgeHi : (tone ? withAlpha(tone, 0.3) : theme.cardEdge)
+    ctx.lineWidth = 1 * S
+    ctx.setLineDash([7 * S, 5 * S])
+    roundRect(r.x, r.y, r.w, r.h, 14 * S)
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // title strip. Floored, because it is chrome rather than content: on a dense
+    // board the card scale drops to 0.42 and an unfloored strip becomes a 10px
+    // target, which is the only handle a section has.
+    const sh = headHeight()
+    ctx.fillStyle = armed ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.028)'
+    roundRect(r.x, r.y, Math.min(r.w, ctxTextWidth(sec.label) + 30 * S), sh, 10 * S)
+    ctx.fill()
+
+    letterSpace(1.8 * S)
+    ctx.fillStyle = tone || theme.textMute
+    ctx.font = `600 ${Math.max(9, 9.5 * S)}px ${theme.fontMono}`
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(String(sec.label).toUpperCase(), r.x + 12 * S, r.y + sh / 2 + 0.5)
+    letterSpace(0)
+
+    if (armed) {
+      ctx.fillStyle = theme.textMute
+      ctx.font = `500 ${Math.max(8.5, 9 * S)}px ${theme.fontMono}`
+      ctx.textAlign = 'right'
+      ctx.fillText(`${inside.length}`, r.x + r.w - 12 * S, r.y + sh / 2 + 0.5)
+    }
+    ctx.restore()
+  }
+
+  function ctxTextWidth(label) {
+    ctx.save()
+    letterSpace(1.8 * S)
+    ctx.font = `600 ${Math.max(9, 9.5 * S)}px ${theme.fontMono}`
+    const w = ctx.measureText(String(label).toUpperCase()).width
+    letterSpace(0)
+    ctx.restore()
+    return w
+  }
+
+  const headHeight = () => Math.max(21, SECTION_HEAD * S)
+
+  function sectionRect(sec) {
+    return {
+      x: toPx(sec.x), y: sec.y * H,
+      w: sec.w * W * (1 - gutter), h: sec.h * H,
+    }
+  }
+
+  // Only the title strip is grabbable.
+  function sectionHeadAt(sim, sx, sy) {
+    const p = toFrame(sx, sy)
+    for (const sec of [...(sim.state.sections || [])].reverse()) {
+      const r = sectionRect(sec)
+      const sh = headHeight()
+      const hw = Math.min(r.w, ctxTextWidth(sec.label) + 30 * S)
+      if (p.x >= r.x && p.x <= r.x + hw && p.y >= r.y && p.y <= r.y + sh) return sec
+    }
+    return null
   }
 
   // The + affordances. Only nodes that may give traffic get them, which is how
@@ -756,10 +842,11 @@ export function createRenderer(canvas) {
 
   resize()
   return {
-    draw, resize, fit, hitTest, fromPx, handleAt, edgeHitTest,
+    draw, resize, fit, hitTest, fromPx, handleAt, edgeHitTest, sectionHeadAt,
     toFrame, resetCamera, panBy, zoomAt,
     setHover: id => { hoverId = id },
     setHoverEdge: e => { hoverEdge = e },
+    setHoverSection: id => { hoverSection = id },
     setPending: p => { pending = p },
     get camera() { return cam },
     get scale() { return S },

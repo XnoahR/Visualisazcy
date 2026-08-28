@@ -97,6 +97,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   let drag = null
   let panning = null
   let wire = null
+  let secDrag = null
   const onNotice = opts.onNotice || (() => {})
 
   const pointAt = ev => {
@@ -127,6 +128,14 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
     const n = renderer.hitTest(sim, x, y)
     if (!n) {
+      // A section's title strip moves the section and everything inside it.
+      const sec = renderer.sectionHeadAt(sim, x, y)
+      if (sec) {
+        const f = renderer.toFrame(x, y)
+        secDrag = { id: sec.id, fx: f.x, fy: f.y, moved: false }
+        try { canvas.setPointerCapture(ev.pointerId) } catch {}
+        return
+      }
       // Empty space pans the camera, the way any canvas tool behaves.
       panning = { x, y }
       try { canvas.setPointerCapture(ev.pointerId) } catch {}
@@ -157,6 +166,21 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       return
     }
 
+    if (secDrag) {
+      const f = renderer.toFrame(x, y)
+      const { W, H } = renderer.size
+      const dx = (f.x - secDrag.fx) / (W * (1 - renderer.gutter))
+      const dy = (f.y - secDrag.fy) / H
+      if (dx || dy) {
+        sim.moveSection(secDrag.id, dx, dy)
+        secDrag.fx = f.x
+        secDrag.fy = f.y
+        secDrag.moved = true
+      }
+      canvas.style.cursor = 'grabbing'
+      return
+    }
+
     if (panning) {
       renderer.panBy(x - panning.x, y - panning.y)
       panning = { x, y }
@@ -170,8 +194,10 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       // Only arm a wire for deletion when nothing else is under the cursor.
       renderer.setHoverEdge(over || renderer.handleAt(sim, x, y)
         ? null : renderer.edgeHitTest(sim, x, y))
+      const head = over ? null : renderer.sectionHeadAt(sim, x, y)
+      renderer.setHoverSection(head ? head.id : null)
       canvas.style.cursor = renderer.handleAt(sim, x, y) ? 'crosshair'
-        : over ? 'grab' : 'default'
+        : over || head ? 'grab' : 'default'
       return
     }
     if (!drag.moved && Math.hypot(x - drag.startX, y - drag.startY) > DRAG_SLOP) {
@@ -187,6 +213,12 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   })
 
   function endDrag(ev) {
+    if (secDrag) {
+      secDrag = null
+      canvas.style.cursor = 'default'
+      try { canvas.releasePointerCapture(ev.pointerId) } catch {}
+      return
+    }
     if (wire) {
       const { x, y } = pointAt(ev)
       const target = renderer.hitTest(sim, x, y)
@@ -236,10 +268,17 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       sim.removeNode(node.id)
       renderer.setHover(null)
     } else {
-      const edge = renderer.edgeHitTest(sim, x, y)
-      if (!edge) return
-      sim.disconnect(edge.from, edge.to)
-      renderer.setHoverEdge(null)
+      const sec = renderer.sectionHeadAt(sim, x, y)
+      if (sec) {
+        // Removing the grouping never removes what was grouped.
+        sim.removeSection(sec.id)
+        renderer.setHoverSection(null)
+      } else {
+        const edge = renderer.edgeHitTest(sim, x, y)
+        if (!edge) return
+        sim.disconnect(edge.from, edge.to)
+        renderer.setHoverEdge(null)
+      }
     }
     if (sim.state.scene.autoLayout) sim.autoLayout()
     renderer.fit(sim.state.nodes)
@@ -278,6 +317,11 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     sim, renderer, play, pause, toggle, reset, load, resize, destroy,
     goToStep, layout, state: sim.state,
     resetCamera: () => renderer.resetCamera(),
+    addSection: (label, x, y, w, h) => {
+      const sec = sim.addSection(label, x, y, w, h)
+      onStats(sim.state.stats)
+      return sec
+    },
     addNode: (type, fx, fy) => {
       const n = sim.addNode(type, fx, fy)
       if (n) { renderer.fit(sim.state.nodes); onStats(sim.state.stats) }

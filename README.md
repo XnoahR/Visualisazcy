@@ -144,6 +144,33 @@ the click. Adding and removing write through to the scene definition as well as
 the running state, so the ✎ editor and ⧉ layout copy always agree with what is
 on screen.
 
+## Sections
+
+Grouping, and nothing more: a labelled rectangle behind the nodes.
+
+![sections](docs/sections.png)
+
+```js
+sections: [
+  g('sec_edge', 'Edge',     0.19, 0.13, 0.32, 0.76, { tone: 'accent' }),
+  g('sec_app',  'App tier', 0.53, 0.13, 0.28, 0.76, { tone: 'good' }),
+]
+```
+
+Two decisions carry it:
+
+- **Membership is geometric.** Whatever sits inside the rectangle belongs to it,
+  recomputed on demand rather than stored. Drag a node in or out and it just
+  works — there is no membership list to drift out of sync with where things
+  actually are.
+- **Only the title strip is grabbable**, and it moves the section with its
+  contents. Making the whole body a drag target would fight panning and node
+  selection. The strip is floored at 21px because it is chrome, not content: on
+  a dense board the card scale drops to 0.42, which would leave a 10px handle.
+
+Right-click the strip to remove the grouping; the nodes it held stay exactly
+where they are. ▢ adds one.
+
 ## Plugging things together
 
 Drag from a **+** handle to wire one node to another. Handles only appear on

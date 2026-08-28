@@ -129,6 +129,7 @@
         <button id="reset">Reset</button>
         <button id="copy" title="Copy the current node positions as scene data">⧉</button>
         <button id="edit" title="Edit this scene as data" aria-pressed="false">✎</button>
+        <button id="sect" title="Add a section around the middle of the board">▢</button>
       </div>
     </div>
 
@@ -250,6 +251,11 @@ $('tl-next').onclick = () => { engine.goToStep(engine.timeline.state.idx + 1); p
 
 $('play').onclick  = () => { engine.toggle(); paint() }
 $('reset').onclick = () => { engine.reset(); paint() }
+$('sect').onclick = () => {
+  engine.addSection('Section', 0.3, 0.28, 0.4, 0.44)
+  paint()
+}
+
 $('copy').onclick = async () => {
   const text = engine.layout().map(p => `  ${p.id}: [${p.x}, ${p.y}],`).join('\n')
   try { await navigator.clipboard.writeText(text) } catch {}
