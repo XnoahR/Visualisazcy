@@ -19,13 +19,17 @@ export function edge(from, to) {
   return { from, to }
 }
 
-export function scene({ id, title, caption, nodes, edges }) {
+// nodes/edges are optional: a slots scene has neither, and the simulation
+// simply has nothing to run.
+export function scene(def) {
+  const nodes = def.nodes || []
+  const edges = def.edges || []
   const ids = new Set(nodes.map(n => n.id))
   for (const e of edges) {
-    if (!ids.has(e.from)) throw new Error(`${id}: edge from unknown node "${e.from}"`)
-    if (!ids.has(e.to))   throw new Error(`${id}: edge to unknown node "${e.to}"`)
+    if (!ids.has(e.from)) throw new Error(`${def.id}: edge from unknown node "${e.from}"`)
+    if (!ids.has(e.to))   throw new Error(`${def.id}: edge to unknown node "${e.to}"`)
   }
-  return { id, title, caption, nodes, edges }
+  return { ...def, nodes, edges }
 }
 
 // Resolve a node's fractional position for the current canvas shape.

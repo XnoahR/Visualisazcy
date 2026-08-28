@@ -173,6 +173,67 @@ Three things make this layer work rather than merely exist:
 
 `focus` costs the author one array and is the cheapest way to aim the eye.
 
+## Scene kinds
+
+A scene declares its `kind`; the kind decides how the body of the frame is drawn.
+Everything around it — background, annotations, chrome, focus, easing, the
+timeline — is shared. That is the whole point of the split: **a new visual
+vocabulary costs one function, not a second engine.**
+
+- `graph` (default) — nodes, wires, packets, capacity. Built in.
+- `slots` — a row or column of cells whose contents change per step, with
+  pointers naming positions. `src/renderers/slots.js`.
+
+![slots](docs/slots.png)
+
+`slots` exists because a node graph cannot say what an LRU cache does. One shape
+covers caches, the stack and the heap, hash buckets, cache tables and shard maps
+— which is roughly half of what the reference work draws.
+
+```js
+scene({
+  id: 'lru', kind: 'slots',
+  slots: { count: 5, label: 'Cache' },
+  steps: [{
+    label: 'F arrives', duration: 5000,
+    cells: [{ text: 'F', sub: 'just now', tone: 'good' }, { text: 'B', sub: '1s ago' }],
+    pointers: [{ at: 0, text: 'new' }, { at: 4, text: 'next to evict' }],
+  }],
+})
+```
+
+Register another with `registerRenderer(kind, fn)`; it receives a drawing surface
+and returns a Map of boxes so annotations can anchor to whatever it drew. A cell
+that changes between steps flashes, which is what makes an eviction readable
+rather than merely different.
+
+For one odd mark rather than a whole kind, `registerMark(type, fn)` adds to the
+annotation vocabulary. That is deliberately a plain function: a scripting DSL
+would be weaker than the JavaScript already available, and much harder to
+generate correctly.
+
+## Validation
+
+`validateScene(def)` returns `{ errors, warnings, ok }`. The point is not safety,
+it is **generation**: a scene is data, so it can be written by a tool or a model
+— but only if a wrong scene fails specifically.
+
+```
+ERROR  nodes[1].type: unknown node type "postgres". known types: client, dns, edge, lb, ...
+ERROR  steps[0].edges: "a>c" is not an edge in this scene. declared edges: a>zzz, c>c
+ERROR  steps[0].gutter: gutter is 1.4; it is a fraction of the width, so 0..0.9
+```
+
+Every message names the valid options, so a generator can correct itself from the
+error alone. `validateAll(SCENES)` runs on page load and reports to the console.
+
+## Sandbox
+
+The ✎ button opens the current scene as editable JSON under the canvas. Edits are
+debounced, validated, and applied live; invalid ones report why and leave the
+running scene alone. It is a small feature only because the scene was already
+data.
+
 ## Add a scene
 
 `scenes/index.js`:
@@ -221,6 +282,9 @@ src/registry.js   node types: role, capacity, colour, icon
 src/scene.js      scene spec helpers and fractional placement
 src/sim.js        the simulation plus presentation state
 src/timeline.js   step sequencing for story scenes
+src/annotate.js   annotation marks: stat, bar, callout, bracket, note
+src/validate.js   scene schema and error reporting
+src/renderers/    additional scene kinds
 src/render.js     canvas 2D renderer
 src/engine.js     rAF loop, resize, click-to-kill
 scenes/index.js   the demo scenes

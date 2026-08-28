@@ -208,3 +208,78 @@ export const scaleStory = {
 }
 
 SCENES.push(scaleStory)
+
+// ---------------------------------------------------------------------------
+// A slots scene. No nodes, no edges, no simulation — just cells whose contents
+// change per step. Position 0 is the most recently used; the last position is
+// whatever gets evicted next.
+
+const cell = (text, sub, tone) => (text ? { text, sub, tone } : null)
+
+export const lru = scene({
+  id: 'lru',
+  kind: 'slots',
+  title: 'LRU: what gets evicted',
+  caption: 'Five slots, and a rule about which one loses.',
+  watermark: 'Visualizcy',
+  slots: { count: 5, label: 'Cache', cellWidth: 96, cellHeight: 66 },
+  steps: [
+    {
+      label: 'Five slots',
+      note: 'An empty cache. Every read that misses will put something here.',
+      duration: 3400,
+      cells: [],
+      pointers: [{ at: 0, text: 'most recent' }, { at: 4, text: 'next to evict' }],
+    },
+    {
+      label: 'Three reads',
+      note: 'A, then B, then C. Each new read goes to the front, so the order is the reverse of how you asked.',
+      duration: 4200,
+      cells: [cell('C', 'just now', 'good'), cell('B', '1s ago'), cell('A', '2s ago')],
+      pointers: [{ at: 0, text: 'most recent' }, { at: 4, text: 'next to evict' }],
+    },
+    {
+      label: 'Now it is full',
+      note: 'D and E arrive. Five slots, five values, and A has drifted to the far end.',
+      duration: 4200,
+      cells: [cell('E', 'just now', 'good'), cell('D', '1s ago'), cell('C', '2s ago'),
+              cell('B', '3s ago'), cell('A', '4s ago', 'warn')],
+      pointers: [{ at: 0, text: 'most recent' }, { at: 4, text: 'next to evict' }],
+      gutter: 0.28,
+      annotations: [
+        { type: 'note', at: [0.05, 0.42], width: 200, tone: 'dim',
+          text: 'Nothing has been evicted yet. A is simply the one with the most to lose.' },
+      ],
+    },
+    {
+      label: 'Read B again',
+      note: 'B was fourth. Reading it moves it to the front, and everything it passed slides down one.',
+      duration: 4400,
+      cells: [cell('B', 'just now', 'accent'), cell('E', '1s ago'), cell('D', '2s ago'),
+              cell('C', '3s ago'), cell('A', '5s ago', 'warn')],
+      pointers: [{ at: 0, text: 'moved here' }, { at: 4, text: 'next to evict' }],
+      gutter: 0.28,
+      annotations: [
+        { type: 'note', at: [0.05, 0.42], width: 200, tone: 'dim',
+          text: 'This is the whole algorithm. Use something, and it stops being the candidate.' },
+      ],
+    },
+    {
+      label: 'F arrives',
+      note: 'The cache is full and F is new. Something has to go, and the rule already decided which.',
+      duration: 5000,
+      cells: [cell('F', 'just now', 'good'), cell('B', '1s ago'), cell('E', '2s ago'),
+              cell('D', '3s ago'), cell('C', '4s ago')],
+      pointers: [{ at: 0, text: 'new' }, { at: 4, text: 'next to evict' }],
+      gutter: 0.28,
+      annotations: [
+        { type: 'stat', at: [0.05, 0.36], value: 1, tone: 'bad', size: 34,
+          label: 'evicted: A', key: 'ev' },
+        { type: 'note', at: [0.05, 0.52], width: 200, tone: 'warn',
+          text: 'A was not the oldest thing you stored. It was the oldest thing you used.' },
+      ],
+    },
+  ],
+})
+
+SCENES.push(lru)

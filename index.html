@@ -30,7 +30,7 @@
   h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
   .sub { color: var(--mute); font-size: 12px; margin-top: 4px; }
 
-  .stage { display: flex; align-items: flex-start; justify-content: center; }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .frame {
     background: var(--bg); border: 1px solid var(--edge); border-radius: 16px;
     overflow: hidden; width: 100%; position: relative;
@@ -63,6 +63,21 @@
   .caption { font-size: 12px; line-height: 1.55; color: var(--dim); }
   .caption strong { color: var(--text); font-weight: 600; display: block; margin-bottom: 5px; font-size: 12.5px; }
   .tip { font-size: 11px; color: var(--mute); line-height: 1.5; }
+  .editor { width: 100%; background: var(--card); border: 1px solid var(--edge); border-radius: 13px; padding: 13px; }
+  .ed-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+  .ed-status { font-family: var(--mono); font-size: 10px; color: var(--good); }
+  .ed-status[data-bad="1"] { color: var(--bad); }
+  #ed-text {
+    width: 100%; height: 260px; resize: vertical; background: var(--bg);
+    color: var(--dim); border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.6; tab-size: 2;
+  }
+  #ed-text:focus { outline: none; border-color: rgba(110,160,255,.4); }
+  .ed-errors {
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.7;
+    color: var(--bad); margin-top: 9px; white-space: pre-wrap;
+  }
+  .ed-errors:empty { display: none; }
   .tl-label {
     font-family: var(--mono); font-size: 10px; color: var(--mute);
     margin-top: 9px; line-height: 1.5; letter-spacing: .04em; text-transform: uppercase;
@@ -78,6 +93,15 @@
 
   <div class="stage">
     <div class="frame" id="frame" data-aspect="16:9"><canvas id="c"></canvas></div>
+
+    <div class="editor" id="editor" hidden>
+      <div class="ed-head">
+        <span class="lbl" style="margin:0">Scene source</span>
+        <span class="ed-status" id="ed-status">valid</span>
+      </div>
+      <textarea id="ed-text" spellcheck="false"></textarea>
+      <div class="ed-errors" id="ed-errors"></div>
+    </div>
   </div>
 
   <aside>
@@ -86,6 +110,7 @@
         <button class="primary" id="play">▶ Play</button>
         <button id="reset">Reset</button>
         <button id="copy" title="Copy the current node positions as scene data">⧉</button>
+        <button id="edit" title="Edit this scene as data" aria-pressed="false">✎</button>
       </div>
     </div>
 
@@ -137,6 +162,14 @@
 <script type="module">
 import { createEngine } from './src/engine.js'
 import { SCENES } from './scenes/index.js'
+import { validateAll, validateScene } from './src/validate.js'
+import { scene } from './src/scene.js'
+import './src/renderers/slots.js'   // self-registers the 'slots' kind
+
+const check = validateAll(SCENES)
+if (check.errors || check.warnings) {
+  console.warn(`Visualizcy: ${check.errors} error(s), ${check.warnings} warning(s)\n${check.text}`)
+}
 
 const canvas = document.getElementById('c')
 const frame  = document.getElementById('frame')
@@ -177,6 +210,7 @@ for (const s of SCENES) {
     engine.load(s)
     $('caption').innerHTML = `<strong>${s.title}</strong>${s.caption}`
     for (const el of list.children) el.setAttribute('aria-pressed', String(el === b))
+    if (editing) openEditor()
     paint()
   }
   list.appendChild(b)
@@ -203,6 +237,69 @@ $('aspect').onclick = ev => {
   for (const el of $('aspect').children) el.setAttribute('aria-pressed', String(el === b))
   requestAnimationFrame(() => engine.resize())
 }
+
+// --- sandbox editor -------------------------------------------------------
+// The scene is already data, which is the only reason this is a small feature
+// rather than a project: edit the JSON, validate, hand it to the engine.
+
+let editing = false
+let edTimer = null
+
+function serialize(def) {
+  // Drop what the runtime adds back on load, so what you edit is what a scene
+  // file would actually contain.
+  const { nodes, edges, ...rest } = def
+  const out = { ...rest }
+  if (nodes?.length) out.nodes = nodes
+  if (edges?.length) out.edges = edges
+  return JSON.stringify(out, null, 2)
+}
+
+function openEditor() {
+  $('ed-text').value = serialize(engine.sim.state.scene)
+  $('ed-errors').textContent = ''
+  setStatus(true, 'valid')
+}
+
+function setStatus(ok, text) {
+  const el = $('ed-status')
+  el.textContent = text
+  el.dataset.bad = ok ? '0' : '1'
+}
+
+function applyEdit() {
+  let parsed
+  try {
+    parsed = JSON.parse($('ed-text').value)
+  } catch (err) {
+    setStatus(false, 'not JSON')
+    $('ed-errors').textContent = String(err.message)
+    return
+  }
+  const r = validateScene(parsed)
+  if (!r.ok) {
+    setStatus(false, `${r.errors.length} error${r.errors.length === 1 ? '' : 's'}`)
+    $('ed-errors').textContent = r.errors.map(e => `${e.path}: ${e.message}`).join('\n')
+    return
+  }
+  $('ed-errors').textContent = r.warnings.map(w => `warn  ${w.path}: ${w.message}`).join('\n')
+  setStatus(true, r.warnings.length ? `valid, ${r.warnings.length} warning(s)` : 'valid')
+  current = scene(parsed)
+  engine.load(current)
+  paint()
+}
+
+$('edit').onclick = () => {
+  editing = !editing
+  $('editor').hidden = !editing
+  $('edit').setAttribute('aria-pressed', String(editing))
+  if (editing) openEditor()
+}
+
+$('ed-text').addEventListener('input', () => {
+  clearTimeout(edTimer)
+  edTimer = setTimeout(applyEdit, 400)   // debounce: do not reload on every keystroke
+})
 
 // keep In flight ticking even while idle
 setInterval(paint, 120)

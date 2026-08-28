@@ -220,6 +220,16 @@ function overlapArea(s, x, y, w, h, exceptId) {
   return total
 }
 
+// The escape hatch. A scene that needs one odd mark registers a plain function
+// instead of anyone inventing a scripting language for it.
+export function registerMark(type, fn) {
+  MARKS[type] = fn
+}
+
+export function markTypes() {
+  return Object.keys(MARKS)
+}
+
 function wrap(ctx, text, maxW) {
   const out = []
   let line = ''

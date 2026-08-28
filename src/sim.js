@@ -37,7 +37,7 @@ export function createSim(sceneDef, opts = {}) {
 
   function load(def = state.scene) {
     state.scene = def
-    state.nodes = def.nodes.map(n => {
+    state.nodes = (def.nodes || []).map(n => {
       const at = placement(n, state.portrait)
       return {
         id: n.id,
@@ -63,7 +63,7 @@ export function createSim(sceneDef, opts = {}) {
         dimTarget: 0,
       }
     })
-    state.edges = def.edges.map(e => ({ ...e, off: false }))
+    state.edges = (def.edges || []).map(e => ({ ...e, off: false }))
     reset()
     stageEntrance(state.animTime)
   }

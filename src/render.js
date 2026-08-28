@@ -7,6 +7,13 @@ import { typeOf, roleOf } from './registry.js'
 import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
 import { drawAnnotations } from './annotate.js'
 
+// Scene-kind registry. 'graph' is built in; anything else registers into it.
+const SCENE_KINDS = {}
+
+export function registerRenderer(kind, fn) {
+  SCENE_KINDS[kind] = fn
+}
+
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d')
   let W = 0, H = 0, S = 1, dt = 16
@@ -21,6 +28,24 @@ export function createRenderer(canvas) {
   // are keyed per step, so each beat starts its counters fresh.
   const counterVals = new Map()
   let counterEpoch = null
+  // Scratch space for renderers that need damped state between frames (a cell
+  // that just changed, a pointer sliding). Cleared when the step changes so a
+  // beat always starts clean.
+  const scratch = new Map()
+  let scratchEpoch = null
+  const store = {
+    epoch(key) {
+      if (scratchEpoch === key) return
+      scratchEpoch = key
+      scratch.clear()
+    },
+    get(key, init) {
+      if (!scratch.has(key)) scratch.set(key, init)
+      return scratch.get(key)
+    },
+    set(key, v) { scratch.set(key, v); return v },
+  }
+
   const counters = {
     epoch(key) {
       if (counterEpoch === key) return
@@ -79,6 +104,22 @@ export function createRenderer(canvas) {
     return { cx, cy, w, h, hw: w / 2, hh: h / 2 }
   }
 
+  // A scene declares its kind; the kind decides how the body of the frame is
+  // drawn. Everything around it — background, annotations, chrome, easing, the
+  // timeline — is shared, which is the whole point of the split: a new visual
+  // vocabulary costs one function, not a second engine.
+  function drawGraph(surf, sim) {
+    const st = sim.state
+    const boxes = new Map(st.nodes.map(n => [n.id, boxOf(n)]))
+    for (const e of st.edges) paintWire(sim, boxes, e)
+    for (const p of st.packets) paintPacket(sim, boxes, p)
+    for (const n of st.nodes) {
+      if (sim.appearOf(n) <= 0) continue
+      paintCard(sim, n, boxes.get(n.id))
+    }
+    return boxes
+  }
+
   function draw(sim, chrome = null, frameDt = 16) {
     dt = frameDt
     gutter = chrome?.gutter || 0
@@ -86,14 +127,15 @@ export function createRenderer(canvas) {
     ctx.clearRect(0, 0, W, H)
     paintBackground()
 
-    const boxes = new Map(st.nodes.map(n => [n.id, boxOf(n)]))
+    // 'graph' stays a closure over this renderer's card painters; registered
+    // kinds get the surface and draw whatever they like on it.
+    const kind = st.scene.kind || 'graph'
+    if (chrome) store.epoch(chrome.key)
+    const external = kind !== 'graph' && SCENE_KINDS[kind]
+    const boxes = external
+      ? (external(surface(new Map()), sim, chrome, { store, counters }) || new Map())
+      : drawGraph(null, sim)
 
-    for (const e of st.edges) paintWire(sim, boxes, e)
-    for (const p of st.packets) paintPacket(sim, boxes, p)
-    for (const n of st.nodes) {
-      if (sim.appearOf(n) <= 0) continue
-      paintCard(sim, n, boxes.get(n.id))
-    }
     if (chrome) {
       if (chrome.annotations) {
         counters.epoch(chrome.key)
@@ -107,8 +149,10 @@ export function createRenderer(canvas) {
   // against a node without letting it reach into renderer internals.
   function surface(boxes) {
     return {
-      ctx, S, W, H,
-      roundRect,
+      ctx, W, H, dt,
+      get S() { return S },
+      get gutter() { return gutter },
+      roundRect, truncate, letterSpace, theme,
       nodeBox: id => boxes.get(id) || null,
       allBoxes: () => boxes.entries(),
     }
