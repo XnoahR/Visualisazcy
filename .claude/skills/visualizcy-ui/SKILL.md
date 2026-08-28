@@ -1,0 +1,110 @@
+---
+name: visualizcy-ui
+description: Design rules for the Visualizcy app shell — layout regions, control grouping, the token set, and the specific mistakes already made here. Load before changing index.html, adding a control, or restyling any panel.
+---
+
+# Visualizcy UI
+
+The app shell is `index.html` alone: markup, styles and wiring in one file. The
+engine (`src/`) never knows about the UI, and the UI never reaches into engine
+internals beyond the documented API. Keep that line.
+
+## Tokens are not optional
+
+Every colour comes from `src/theme.js`. The CSS mirrors it in `:root`; if the two
+ever disagree, `theme.js` wins and the CSS is the bug.
+
+```
+--bg #08090d   --card #14171f   --edge rgba(255,255,255,.055)
+--edge-hi rgba(255,255,255,.13)
+--text #f5f6fa   --dim #9498ab   --mute #5a5f74
+--accent #6ea0ff   --good #6ee7b7   --warn #fcd34d   --bad #fca5a5
+display: Space Grotesk    mono: JetBrains Mono
+```
+
+Border at 5.5% opacity is deliberate and easy to get wrong — a brighter border
+is the fastest way to make this look cheap. Panels are `--card` on `--bg`, never
+a third surface colour.
+
+## Layout regions
+
+Four regions, fixed roles. Do not invent a fifth.
+
+```
+┌ toolbar ───────────────────────────────────────────┐
+│ identity │ transport │ history │ tools │ … │ output │
+├──────────┬──────────────────────────┬──────────────┤
+│ palette  │        stage             │   context    │
+│  (left)  │      (the canvas)        │   (right)    │
+├──────────┴──────────────────────────┴──────────────┤
+│ timeline strip — only when the scene has steps      │
+└─────────────────────────────────────────────────────┘
+```
+
+- **Toolbar** — verbs. Things you do to the whole board.
+- **Palette (left)** — nouns. Things you drag onto the board. Generated from
+  `registry.js`; never hand-list types.
+- **Stage** — gets every pixel the other three do not need.
+- **Context (right)** — what is loaded and what it is doing right now.
+- **Timeline** — hidden entirely for scenes without steps. An empty strip is
+  worse than no strip.
+
+## Controls
+
+**Group by verb, separate with a rule.** Transport, history, tools and output are
+four groups, not eleven adjacent buttons.
+
+**A glyph alone is not a control.** `⧉ ✎ ▢ ↶ ↷ ⏺` told the user nothing — that is
+a real complaint this app already received. Every control carries a `title`, and
+anything not universally understood carries a visible label. Play, Reset and
+Record earn words; undo/redo arrows may stay bare because the arrows are
+conventional.
+
+**Destructive and irreversible controls never sit next to routine ones.** Record
+writes a file; keep it in the output group at the far end.
+
+## Sizing the canvas
+
+Never pin the frame to a hardcoded width. `max-width: 380px` on the 9:16 frame
+gave every renderer a third of the room it was designed for, and made both the
+portrait scenes and the size control look broken. That was one bug wearing two
+disguises.
+
+Size from the height available and derive width from `aspect-ratio`:
+
+```css
+.frame { aspect-ratio: var(--ar); height: calc(100% * var(--zoom, 1)); width: auto; }
+```
+
+The stage scrolls when `--zoom` exceeds 1, so "bigger" genuinely means bigger.
+
+After any change to the frame's box, call `engine.resize()` on the next frame —
+the renderer caches `W`, `H` and the fit scale, and will not notice otherwise.
+
+## Panels
+
+Each panel is one job with one `.lbl` heading. When a panel needs a second
+heading it is two panels.
+
+Order by how often it is touched, not by how it was built. The scene list sat
+above the palette for a while purely because it was written first.
+
+## Adding a control
+
+1. Decide its group. If it fits none, the grouping is wrong, not the control.
+2. Give it an id, a `title`, and a label unless the glyph is conventional.
+3. Wire it in the script block near its siblings.
+4. If it changes the frame's geometry, `requestAnimationFrame(() => engine.resize())`.
+5. Check it at 16:9, 1:1 and 9:16 before calling it done — portrait is where
+   this app breaks first, every time.
+
+## Verifying
+
+The app exposes `window.__visualizcy` for exactly this. Drive real gestures
+(`PointerEvent`, `DragEvent`, `contextmenu`) rather than calling engine methods,
+because the gap between the two is where the bugs have actually been: the `+`
+handles were unusable for a whole session because hover was tested against the
+card while the handles sat outside it.
+
+Direct renderer calls take **canvas-relative** coordinates; dispatched events
+take **client** coordinates. Mixing them produces a convincing false failure.

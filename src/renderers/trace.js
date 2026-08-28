@@ -38,24 +38,43 @@ registerRenderer('trace', (s, sim, chrome) => {
   const left = s.gutter * W
   const usable = W - left
   const pad = 30 * S
+  const n = visible.length
 
-  // Lanes sit side by side, or stacked when the frame is taller than it is wide.
+  // How much room the panels under a trace actually need. The first version
+  // guessed with a fixed ratio, which is why portrait overflowed the frame:
+  // four metric rows and a verdict do not fit in half a stacked lane.
+  function panelHeight(lane) {
+    let h = 0
+    if (panels.includes('metrics')) h += 4 * 19 * S + 12 * S
+    if (panels.includes('score')) h += 47 * S
+    if (panels.includes('verdict')) h += 26 * S + (lane.score >= 0.5 ? 10 * S : 38 * S)
+    return h ? h + 26 * S : 0
+  }
+
+  // Chrome owns the top (label plus a narration that wraps to two lines) and a
+  // strip at the bottom for the section line and step counter. Lanes get what
+  // is left, never more.
+  const top = portrait ? H * 0.20 : H * 0.245
+  const bottom = portrait ? H * 0.09 : H * 0.06
+  const avail = H - top - bottom
+
   const lanes = visible.map((lane, i) => {
-    const n = visible.length
     if (portrait) {
-      const h = (H - pad * 2) / n
-      return { lane, x: left + pad, y: pad + i * h, w: usable - pad * 2, h: h - pad * 0.6 }
+      const gap = 18 * S
+      const h = (avail - gap * (n - 1)) / n
+      return { lane, x: left + pad, y: top + i * (h + gap), w: usable - pad * 2, h }
     }
     const w = (usable - pad * (n + 1)) / n
-    return { lane, x: left + pad + i * (w + pad), y: H * 0.245, w, h: H * 0.62 }
+    return { lane, x: left + pad + i * (w + pad), y: top, w, h: avail }
   })
 
   for (const slot of lanes) paintLane(slot)
 
   function paintLane({ lane, x, y, w, h }) {
     const tone = s.theme[lane.tone] || s.theme.accent
-    // The trace box is the top portion; panels stack underneath it.
-    const boxH = h * (panels.length ? 0.52 : 0.82)
+    // Whatever the panels do not need, the trace box gets — with a floor, so a
+    // crowded frame shrinks the picture rather than pushing it off the edge.
+    const boxH = Math.max(h * 0.22, h - panelHeight(lane))
 
     ctx.save()
     ctx.globalAlpha = easeOutCubic(enter)
@@ -115,8 +134,16 @@ registerRenderer('trace', (s, sim, chrome) => {
     s.letterSpace(1.4 * S)
     ctx.font = `500 ${Math.max(8, 8.5 * S)}px ${s.theme.fontMono}`
     ctx.fillStyle = s.theme.textMute
-    ctx.textAlign = 'left'
-    ctx.fillText('I AM NOT A ROBOT', target.x + bx + 9 * S, target.y + 3 * S)
+    const cap = 'I AM NOT A ROBOT'
+    const capW = ctx.measureText(cap).width
+    // Beside the box if it fits inside the lane, underneath it if not.
+    if (target.x + bx + 9 * S + capW <= x + w) {
+      ctx.textAlign = 'left'
+      ctx.fillText(cap, target.x + bx + 9 * S, target.y + 3 * S)
+    } else {
+      ctx.textAlign = 'center'
+      ctx.fillText(cap, Math.min(Math.max(target.x, x + capW / 2), x + w - capW / 2), target.y + bx + 15 * S)
+    }
     s.letterSpace(0)
 
     // --- the straight line, for comparison --------------------------------

@@ -129,6 +129,29 @@ real word says more than an ellipsis. Zoom in for the rest.
 
 ![sandbox](docs/sandbox.png)
 
+## The app shell
+
+![app](docs/app.png)
+
+Four regions with fixed roles: a toolbar of **verbs** grouped and separated by
+rules, a **palette** of nouns on the left, the **stage**, and a **context** panel
+on the right. The timeline strip appears only for scenes that have steps — an
+empty strip is worse than no strip.
+
+Frame geometry is computed in `sizeFrame()`, not left to CSS. Two attempts at
+`aspect-ratio` with competing constraints both failed the same way: with a width
+and a max-height set, the browser clips the other axis instead of shrinking it,
+which is how 1:1 and 9:16 both ended up 810x520. Fitting the ratio inside the
+stage and scaling by the size control is exact and testable:
+
+| | 16:9 | 1:1 | 9:16 |
+|---|---|---|---|
+| size | 810x456 | 520x520 | 293x520 |
+
+At S/M the whole frame is visible; L and XL overflow deliberately and the stage
+scrolls. `.claude/skills/visualizcy-ui/SKILL.md` records the rules and the
+mistakes so the next change does not repeat them.
+
 ## Rendering a video
 
 ⏺ renders the loaded story to a `.webm`.

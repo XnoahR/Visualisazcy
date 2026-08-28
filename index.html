@@ -6,110 +6,156 @@
 <title>Visualizcy — system diagrams that run</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Tokens mirror src/theme.js. If they ever disagree, theme.js wins. */
   :root {
     --bg: #08090d; --card: #14171f; --edge: rgba(255,255,255,0.055);
     --edge-hi: rgba(255,255,255,0.13); --text: #f5f6fa; --dim: #9498ab;
     --mute: #5a5f74; --accent: #6ea0ff; --good: #6ee7b7; --warn: #fcd34d; --bad: #fca5a5;
     --display: "Space Grotesk", system-ui, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, monospace;
+    --bar: 52px; --left: 236px; --right: 264px;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font-family: var(--display); -webkit-font-smoothing: antialiased;
+    font-family: var(--display); -webkit-font-smoothing: antialiased; overflow: hidden;
   }
-  .wrap {
-    display: grid; grid-template-columns: 1fr 268px; gap: 22px;
-    max-width: 1240px; margin: 0 auto; padding: 26px 22px 40px;
-  }
-  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
-
-  header { grid-column: 1 / -1; margin-bottom: 2px; }
-  h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
-  .sub { color: var(--mute); font-size: 12px; margin-top: 4px; }
-
-  .stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .frame {
-    background: var(--bg); border: 1px solid var(--edge); border-radius: 16px;
-    overflow: hidden; width: 100%; position: relative;
-  }
-  .frame[data-aspect="16:9"] { aspect-ratio: 16/9; }
-  .frame[data-aspect="1:1"]  { aspect-ratio: 1/1;  max-width: 620px; }
-  .frame[data-aspect="9:16"] { aspect-ratio: 9/16; max-width: 380px; }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-
-  aside { display: flex; flex-direction: column; gap: 16px; }
-  .panel { background: var(--card); border: 1px solid var(--edge); border-radius: 13px; padding: 13px; }
+  .mono { font-family: var(--mono); }
   .lbl {
-    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
-    color: var(--mute); text-transform: uppercase; margin-bottom: 9px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+    color: var(--mute); text-transform: uppercase;
   }
-  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ── app shell ───────────────────────────────────────────────────────── */
+  .app { display: flex; flex-direction: column; height: 100%; }
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  /* ── toolbar: verbs, grouped, with rules between groups ──────────────── */
+  .bar {
+    height: var(--bar); flex: none; display: flex; align-items: center; gap: 12px;
+    padding: 0 14px; background: #0b0d13; border-bottom: 1px solid var(--edge);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; }
+  .brand svg { color: var(--accent); }
+  .sep { width: 1px; height: 22px; background: var(--edge); flex: none; }
+  .grp { display: flex; align-items: center; gap: 5px; }
+  .spacer { flex: 1; }
+
   button {
     font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--dim);
     background: rgba(255,255,255,0.035); border: 1px solid var(--edge);
-    border-radius: 8px; padding: 7px 11px; cursor: pointer; transition: .13s;
+    border-radius: 8px; padding: 0 11px; height: 30px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; transition: .12s; white-space: nowrap;
   }
-  button:hover { background: rgba(255,255,255,0.07); color: var(--text); }
-  button:disabled { opacity: .32; cursor: default; }
-  button:disabled:hover { background: rgba(255,255,255,0.035); color: var(--dim); }
-  button[aria-pressed="true"] { background: rgba(110,160,255,0.14); border-color: rgba(110,160,255,0.4); color: var(--accent); }
-  .scenes button { display: block; width: 100%; text-align: left; margin-bottom: 5px; }
-  .primary { flex: 1; color: var(--text); }
+  button:hover { background: rgba(255,255,255,0.075); color: var(--text); border-color: var(--edge-hi); }
+  button:disabled { opacity: .3; cursor: default; }
+  button:disabled:hover { background: rgba(255,255,255,0.035); color: var(--dim); border-color: var(--edge); }
+  button[aria-pressed="true"] {
+    background: rgba(110,160,255,0.15); border-color: rgba(110,160,255,0.45); color: var(--accent);
+  }
+  .icon { padding: 0; width: 30px; justify-content: center; font-size: 13px; }
+  .primary { color: var(--text); }
+  .seg { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--edge); }
+  .seg button { height: 24px; padding: 0 9px; font-size: 11px; border: 0; background: none; border-radius: 6px; }
+  .seg button:hover { background: rgba(255,255,255,0.06); }
 
-  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; }
-  dt { font-size: 11.5px; color: var(--dim); }
-  dd { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
-  .caption { font-size: 12px; line-height: 1.55; color: var(--dim); }
-  .caption strong { color: var(--text); font-weight: 600; display: block; margin-bottom: 5px; font-size: 12.5px; }
-  .tip { font-size: 11px; color: var(--mute); line-height: 1.5; }
-  .editor { width: 100%; background: var(--card); border: 1px solid var(--edge); border-radius: 13px; padding: 13px; }
-  .ed-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
-  .ed-status { font-family: var(--mono); font-size: 10px; color: var(--good); }
-  .ed-status[data-bad="1"] { color: var(--bad); }
-  #ed-text {
-    width: 100%; height: 260px; resize: vertical; background: var(--bg);
-    color: var(--dim); border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
-    font-family: var(--mono); font-size: 11px; line-height: 1.6; tab-size: 2;
+  /* ── side panels ─────────────────────────────────────────────────────── */
+  aside {
+    flex: none; background: #0b0d13; display: flex; flex-direction: column;
+    overflow-y: auto; overscroll-behavior: contain;
   }
-  #ed-text:focus { outline: none; border-color: rgba(110,160,255,.4); }
-  .ed-errors {
-    font-family: var(--mono); font-size: 10.5px; line-height: 1.7;
-    color: var(--bad); margin-top: 9px; white-space: pre-wrap;
+  .left  { width: var(--left);  border-right: 1px solid var(--edge); }
+  .right { width: var(--right); border-left: 1px solid var(--edge); }
+  .panel { padding: 13px 14px; border-bottom: 1px solid var(--edge); }
+  .panel:last-child { border-bottom: 0; }
+  .panel > .lbl { display: block; margin-bottom: 9px; }
+
+  /* ── stage ───────────────────────────────────────────────────────────── */
+  .stage {
+    flex: 1; min-width: 0; display: grid; place-items: center;
+    padding: 18px; overflow: auto; background: #05060a;
   }
-  .ed-errors:empty { display: none; }
+  /* Sized from the height available; width follows the ratio. Pinning a width
+     here is what made 9:16 tiny and cramped. */
+  .frame {
+    background: var(--bg); border: 1px solid var(--edge); border-radius: 12px;
+    overflow: hidden; position: relative;
+    /* Size is computed in sizeFrame(); CSS aspect-ratio with two competing
+       constraints does not shrink the other axis, it just clips — which is how
+       1:1 and 9:16 both ended up 810x520. */
+    flex: none;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* ── palette ─────────────────────────────────────────────────────────── */
   .pal-group { font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
-    color: var(--mute); text-transform: uppercase; margin: 9px 0 5px; }
+    color: var(--mute); text-transform: uppercase; margin: 11px 0 5px; }
   .pal-group:first-child { margin-top: 0; }
   .pal {
     display: flex; align-items: center; gap: 8px; width: 100%;
     background: rgba(255,255,255,0.03); border: 1px solid var(--edge);
-    border-radius: 8px; padding: 5px 8px; margin-bottom: 4px; cursor: grab;
-    transition: .12s;
+    border-radius: 8px; padding: 5px 8px; margin-bottom: 4px; cursor: grab; transition: .12s;
   }
   .pal:hover { background: rgba(255,255,255,0.07); border-color: var(--edge-hi); }
   .pal:active { cursor: grabbing; }
-  .pal-ico {
-    font-family: var(--mono); font-size: 7.5px; font-weight: 600;
-    width: 26px; height: 20px; border-radius: 5px; display: grid; place-items: center;
-    flex: none;
-  }
+  .pal-ico { font-family: var(--mono); font-size: 7.5px; font-weight: 600;
+    width: 26px; height: 20px; border-radius: 5px; display: grid; place-items: center; flex: none; }
   .pal-name { font-size: 11.5px; font-weight: 600; color: var(--text); }
   .pal-role { margin-left: auto; font-family: var(--mono); font-size: 8.5px; color: var(--mute); }
-  #home {
-    position: fixed; inset: 0; z-index: 40; background: var(--bg);
-    overflow-y: auto; padding: 60px 26px 80px;
+
+  /* ── context panel ───────────────────────────────────────────────────── */
+  .now-t { font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+  .now-d { font-size: 11.5px; line-height: 1.55; color: var(--mute); }
+  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; }
+  dt { font-size: 11.5px; color: var(--dim); }
+  dd { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
+  .scenes button { display: block; width: 100%; text-align: left; margin-bottom: 4px; height: auto; padding: 7px 10px; font-weight: 500; }
+  .tip { font-size: 10.5px; color: var(--mute); line-height: 1.6; }
+  .tip b { color: var(--dim); font-weight: 600; }
+
+  /* ── timeline strip ──────────────────────────────────────────────────── */
+  .timeline {
+    flex: none; background: #0b0d13; border-top: 1px solid var(--edge);
+    padding: 11px 14px; display: flex; align-items: center; gap: 14px;
   }
+  .timeline[hidden] { display: none; }
+  .tl-step { font-family: var(--mono); font-size: 12px; font-weight: 600; min-width: 46px; text-align: center; }
+  .tl-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dim); }
+
+  /* ── editor drawer ───────────────────────────────────────────────────── */
+  .drawer {
+    position: fixed; left: var(--left); right: var(--right); bottom: 0; z-index: 30;
+    background: #0b0d13; border-top: 1px solid var(--edge-hi);
+    box-shadow: 0 -18px 40px rgba(0,0,0,.5); padding: 13px 16px 16px;
+  }
+  .drawer[hidden] { display: none; }
+  .ed-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+  .ed-status { font-family: var(--mono); font-size: 10px; color: var(--good); }
+  .ed-status[data-bad="1"] { color: var(--bad); }
+  #ed-text {
+    width: 100%; height: 220px; resize: vertical; background: var(--bg); color: var(--dim);
+    border: 1px solid var(--edge); border-radius: 8px; padding: 10px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.6; tab-size: 2;
+  }
+  #ed-text:focus { outline: none; border-color: rgba(110,160,255,.4); }
+  .ed-errors { font-family: var(--mono); font-size: 10.5px; line-height: 1.7;
+    color: var(--bad); margin-top: 9px; white-space: pre-wrap; max-height: 90px; overflow: auto; }
+  .ed-errors:empty { display: none; }
+
+  /* ── start screen ────────────────────────────────────────────────────── */
+  #home { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; padding: 58px 26px 80px; }
   #home[hidden] { display: none; }
-  .home-inner { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; }
+  .home-inner { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
   .home-head h2 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 9px; }
   .home-head p { font-size: 13.5px; line-height: 1.6; color: var(--dim); margin: 0; max-width: 560px; }
   .home-sec { display: flex; flex-direction: column; gap: 11px; }
   .home-start { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .start-card, .tpl {
-    display: flex; flex-direction: column; gap: 5px; text-align: left;
+    display: flex; flex-direction: column; gap: 5px; text-align: left; height: auto;
     background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
     padding: 15px; cursor: pointer; transition: .13s; font-family: var(--display);
   }
@@ -119,49 +165,36 @@
   .sc-d, .tpl-d { font-size: 11.5px; line-height: 1.5; color: var(--mute); }
   .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .tpl-meta { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
-  .chip {
-    font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase;
-    padding: 3px 7px; border-radius: 5px; background: rgba(255,255,255,.05); color: var(--mute);
-  }
+  .chip { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 5px; background: rgba(255,255,255,.05); color: var(--mute); }
   .chip.story { background: rgba(110,160,255,.14); color: var(--accent); }
   .chip.slots { background: rgba(252,211,77,.14); color: var(--warn); }
-  @media (max-width: 760px) {
-    .home-grid, .home-start { grid-template-columns: 1fr; }
-  }
-  .tl-label {
-    font-family: var(--mono); font-size: 10px; color: var(--mute);
-    margin-top: 9px; line-height: 1.5; letter-spacing: .04em; text-transform: uppercase;
-  }
+  @media (max-width: 760px) { .home-grid, .home-start { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+
 <div id="home">
   <div class="home-inner">
     <div class="home-head">
       <h2>Visualizcy</h2>
       <p>System diagrams that run. Objects have capacity, traffic flows as packets, and overloading something shows you what breaks.</p>
     </div>
-
     <div class="home-sec">
       <div class="lbl">Start</div>
       <div class="home-start">
         <button class="start-card" id="new-board">
-          <span class="sc-ico">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          </span>
+          <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
           <span class="sc-t">Empty canvas</span>
           <span class="sc-d">A blank board. Drag objects in from the palette.</span>
         </button>
         <button class="start-card" id="new-from">
-          <span class="sc-ico">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.3 11l7.4-3.6M8.3 13l7.4 3.6"/></svg>
-          </span>
+          <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.3 11l7.4-3.6M8.3 13l7.4 3.6"/></svg></span>
           <span class="sc-t">Sandbox</span>
           <span class="sc-d">Nine objects already wired, for poking at.</span>
         </button>
       </div>
     </div>
-
     <div class="home-sec">
       <div class="lbl">Open a scene</div>
       <div class="home-grid" id="home-grid"></div>
@@ -169,99 +202,127 @@
   </div>
 </div>
 
-<div class="wrap">
-  <header>
-    <h1>Visualizcy</h1>
-    <div class="sub">System diagrams that actually run. Drag from the palette, wire them up, press play.</div>
-  </header>
+<div class="app">
 
-  <div class="stage">
-    <div class="frame" id="frame" data-aspect="16:9"><canvas id="c"></canvas></div>
+  <!-- toolbar: verbs, grouped -->
+  <div class="bar">
+    <span class="brand">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7.3 11l9.4-4M7.3 13l9.4 4"/></svg>
+      Visualizcy
+    </span>
+    <button class="icon" id="home-btn" title="Back to the start screen">⌂</button>
 
-    <div class="editor" id="editor" hidden>
-      <div class="ed-head">
-        <span class="lbl" style="margin:0">Scene source</span>
-        <span class="ed-status" id="ed-status">valid</span>
-      </div>
-      <textarea id="ed-text" spellcheck="false"></textarea>
-      <div class="ed-errors" id="ed-errors"></div>
-    </div>
-  </div>
-
-  <aside>
-    <div class="panel">
-      <div class="row">
-        <button id="home-btn" title="Back to the start screen">⌂</button>
-        <button class="primary" id="play">▶ Play</button>
-        <button id="reset">Reset</button>
-        <button id="copy" title="Copy the current node positions as scene data">⧉</button>
-        <button id="edit" title="Edit this scene as data" aria-pressed="false">✎</button>
-        <button id="sect" title="Add a section around the middle of the board">▢</button>
-        <button id="undo" title="Undo (Ctrl+Z)" disabled>↶</button>
-        <button id="redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
-        <button id="rec" title="Render this story to a video file">⏺</button>
-      </div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="primary" id="play" title="Run the simulation">▶ Play</button>
+      <button id="reset" title="Reset and replay the build-in">Reset</button>
     </div>
 
-    <div class="panel" id="tl-panel" hidden>
-      <div class="lbl">Story</div>
-      <div class="row">
-        <button id="tl-prev">‹</button>
-        <button class="primary" id="tl-step" style="text-align:center">1 / 1</button>
-        <button id="tl-next">›</button>
-      </div>
-      <div class="tl-label" id="tl-label"></div>
+    <div class="sep"></div>
+    <div class="grp">
+      <button class="icon" id="undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button class="icon" id="redo" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
     </div>
 
-    <div class="panel">
-      <div class="lbl">Aspect</div>
-      <div class="row" id="aspect">
+    <div class="sep"></div>
+    <div class="grp">
+      <button id="sect" title="Add a section around the middle of the board">▢ Section</button>
+      <button id="copy" title="Copy the current node positions as scene data">⧉ Layout</button>
+      <button id="edit" title="Edit this scene as JSON" aria-pressed="false">✎ Source</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="grp">
+      <span class="lbl">Frame</span>
+      <div class="seg" id="aspect">
         <button data-a="16:9" aria-pressed="true">16:9</button>
         <button data-a="1:1"  aria-pressed="false">1:1</button>
         <button data-a="9:16" aria-pressed="false">9:16</button>
       </div>
-    </div>
-
-    <div class="panel">
-      <div class="lbl">Live</div>
-      <dl>
-        <dt>Status</dt>     <dd id="m-status" style="color:var(--mute)">Idle</dd>
-        <dt>In flight</dt>  <dd id="m-flight">0</dd>
-        <dt>Processed</dt>  <dd id="m-proc" style="color:var(--good)">0</dd>
-        <dt>Dropped</dt>    <dd id="m-drop" style="color:var(--bad)">0</dd>
-        <dt>Overloaded</dt> <dd id="m-over" style="color:var(--warn)">0</dd>
-      </dl>
-    </div>
-
-    <div class="panel">
-      <div class="lbl">Palette · drag onto the board</div>
-      <div id="palette"></div>
-    </div>
-
-    <div class="panel scenes">
-      <div class="lbl">Scenes</div>
-      <div id="scenes"></div>
-    </div>
-
-    <div class="panel">
-      <div class="caption" id="caption"></div>
-    </div>
-
-    <div class="panel">
-      <div class="tip">
-        <b>Move</b> drag a node · <b>Kill</b> click without dragging · <b>Connect</b> drag from a ＋ handle<br>
-        <b>Delete</b> right-click a node or a wire · <b>Pan</b> drag empty space · <b>Zoom</b> wheel · <b>Reset view</b> double-click<br>
-        ＋ handles appear only on nodes that may send. ⧉ copies the current positions as scene data.
+      <div class="seg" id="zoom">
+        <button data-z="0.7">S</button>
+        <button data-z="1" aria-pressed="true">M</button>
+        <button data-z="1.4">L</button>
+        <button data-z="2">XL</button>
       </div>
     </div>
-  </aside>
+
+    <div class="sep"></div>
+    <button id="rec" title="Render this story to a video file">⏺ Record</button>
+  </div>
+
+  <div class="body">
+
+    <aside class="left">
+      <div class="panel">
+        <span class="lbl">Palette · drag onto the board</span>
+        <div id="palette"></div>
+      </div>
+    </aside>
+
+    <div class="stage">
+      <div class="frame" id="frame" data-aspect="16:9"><canvas id="c"></canvas></div>
+    </div>
+
+    <aside class="right">
+      <div class="panel">
+        <span class="lbl">Now open</span>
+        <div id="caption"></div>
+      </div>
+
+      <div class="panel">
+        <span class="lbl">Live</span>
+        <dl>
+          <dt>Status</dt>     <dd id="m-status" style="color:var(--mute)">Idle</dd>
+          <dt>In flight</dt>  <dd id="m-flight">0</dd>
+          <dt>Processed</dt>  <dd id="m-proc" style="color:var(--good)">0</dd>
+          <dt>Dropped</dt>    <dd id="m-drop" style="color:var(--bad)">0</dd>
+          <dt>Overloaded</dt> <dd id="m-over" style="color:var(--warn)">0</dd>
+        </dl>
+      </div>
+
+      <div class="panel scenes">
+        <span class="lbl">Scenes</span>
+        <div id="scenes"></div>
+      </div>
+
+      <div class="panel">
+        <span class="lbl">On the board</span>
+        <div class="tip">
+          <b>Move</b> drag a node · <b>Kill</b> click without dragging<br>
+          <b>Connect</b> drag from a ＋ handle · <b>Delete</b> right-click<br>
+          <b>Pan</b> drag empty space · <b>Zoom</b> wheel · <b>Fit</b> double-click<br>
+          ＋ handles appear only on objects that may send.
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- only present when the scene has steps -->
+  <div class="timeline" id="tl-panel" hidden>
+    <span class="lbl">Story</span>
+    <button class="icon" id="tl-prev" title="Previous step">‹</button>
+    <span class="tl-step" id="tl-step">1 / 1</span>
+    <button class="icon" id="tl-next" title="Next step">›</button>
+    <span class="tl-label" id="tl-label"></span>
+  </div>
+</div>
+
+<div class="drawer" id="editor" hidden>
+  <div class="ed-head">
+    <span class="lbl">Scene source</span>
+    <span class="ed-status" id="ed-status">valid</span>
+  </div>
+  <textarea id="ed-text" spellcheck="false"></textarea>
+  <div class="ed-errors" id="ed-errors"></div>
 </div>
 
 <script type="module">
 import { createEngine } from './src/engine.js'
 import { SCENES, blankScene } from './scenes/index.js'
 import { validateAll, validateScene } from './src/validate.js'
-import { record, download, supported as canRecord, clipLength } from './src/export.js'
+import { record, download, supported as canRecord } from './src/export.js'
 import { scene } from './src/scene.js'
 import { NODE_TYPES } from './src/registry.js'
 import './src/renderers/slots.js'   // self-registers the 'slots' kind
@@ -316,47 +377,67 @@ for (const s of SCENES) {
   b.onclick = () => open(s)
   list.appendChild(b)
 }
-$('caption').innerHTML = `<strong>${current.title}</strong>${current.caption}`
 
 $('tl-prev').onclick = () => { engine.goToStep(engine.timeline.state.idx - 1); paint() }
 $('tl-next').onclick = () => { engine.goToStep(engine.timeline.state.idx + 1); paint() }
 
 $('play').onclick  = () => { engine.toggle(); paint() }
 $('reset').onclick = () => { engine.reset(); paint() }
+
 $('rec').onclick = async () => {
   const btn = $('rec')
   if (btn.dataset.busy) return
-  if (!canRecord()) { btn.textContent = 'n/a'; return }
+  if (!canRecord()) { btn.textContent = 'unsupported'; return }
   btn.dataset.busy = '1'
   try {
     const blob = await record(engine, canvas, {
       fps: 30,
       onProgress: (i, n) => { btn.textContent = `${Math.round(i / n * 100)}%` },
     })
-    const name = `${engine.state.scene.id}-${frame.dataset.aspect.replace(':', 'x')}.webm`
-    download(blob, name)
-    btn.textContent = '✓'
+    download(blob, `${engine.state.scene.id}-${frame.dataset.aspect.replace(':', 'x')}.webm`)
+    btn.textContent = '✓ saved'
   } catch (err) {
     console.error(err)
-    btn.textContent = '!'
+    btn.textContent = 'failed'
   }
-  setTimeout(() => { btn.textContent = '⏺'; delete btn.dataset.busy; paint() }, 1600)
+  setTimeout(() => { btn.textContent = '⏺ Record'; delete btn.dataset.busy; paint() }, 1800)
 }
 
 $('undo').onclick = () => { engine.undo(); paint() }
 $('redo').onclick = () => { engine.redo(); paint() }
 
-$('sect').onclick = () => {
-  engine.addSection('Section', 0.3, 0.28, 0.4, 0.44)
-  paint()
-}
+$('sect').onclick = () => { engine.addSection('Section', 0.3, 0.28, 0.4, 0.44); paint() }
 
 $('copy').onclick = async () => {
   const text = engine.layout().map(p => `  ${p.id}: [${p.x}, ${p.y}],`).join('\n')
   try { await navigator.clipboard.writeText(text) } catch {}
   console.log(text)
-  $('copy').textContent = '✓'
-  setTimeout(() => { $('copy').textContent = '⧉' }, 1200)
+  $('copy').textContent = '✓ copied'
+  setTimeout(() => { $('copy').textContent = '⧉ Layout' }, 1300)
+}
+
+// Frame geometry is computed, not left to CSS. Fit the ratio inside the stage,
+// then scale by the size control: at 1 the whole frame is visible, above 1 it
+// overflows on purpose and the stage scrolls.
+const stage = document.querySelector('.stage')
+let zoom = 1
+
+function sizeFrame() {
+  const [aw, ah] = frame.dataset.aspect.split(':').map(Number)
+  const availW = Math.max(120, stage.clientWidth - 36)
+  const availH = Math.max(120, stage.clientHeight - 36)
+  const k = Math.min(availW / aw, availH / ah) * zoom
+  frame.style.width  = Math.round(aw * k) + 'px'
+  frame.style.height = Math.round(ah * k) + 'px'
+  engine.resize()
+}
+
+$('zoom').onclick = ev => {
+  const b = ev.target.closest('button')
+  if (!b) return
+  zoom = +b.dataset.z
+  for (const el of $('zoom').children) el.setAttribute('aria-pressed', String(el === b))
+  sizeFrame()
 }
 
 $('aspect').onclick = ev => {
@@ -364,17 +445,17 @@ $('aspect').onclick = ev => {
   if (!b) return
   frame.dataset.aspect = b.dataset.a
   for (const el of $('aspect').children) el.setAttribute('aria-pressed', String(el === b))
-  requestAnimationFrame(() => engine.resize())
+  sizeFrame()
 }
 
+new ResizeObserver(() => sizeFrame()).observe(stage)
+
 // --- start screen ---------------------------------------------------------
-// The app used to open straight into whichever scene happened to be first,
-// which left no way to begin from nothing. Everything here just calls open().
 
 function describe(s) {
   const chips = []
   if (s.steps) chips.push(`<span class="chip story">${s.steps.length} steps</span>`)
-  if (s.kind === 'slots') chips.push('<span class="chip slots">slots</span>')
+  if (s.kind && s.kind !== 'graph') chips.push(`<span class="chip slots">${s.kind}</span>`)
   if (s.nodes?.length) chips.push(`<span class="chip">${s.nodes.length} objects</span>`)
   if (s.sections?.length) chips.push(`<span class="chip">${s.sections.length} sections</span>`)
   return chips.join('')
@@ -394,11 +475,12 @@ for (const s of SCENES) {
 function open(def) {
   current = def
   engine.load(def)
-  $('caption').innerHTML = `<strong>${def.title}</strong>${def.caption || ''}`
+  $('caption').innerHTML =
+    `<div class="now-t">${def.title}</div><div class="now-d">${def.caption || ''}</div>`
   for (const el of list.children) el.setAttribute('aria-pressed', String(el.dataset.id === def.id))
   $('home').hidden = true
   if (editing) openEditor()
-  requestAnimationFrame(() => engine.resize())
+  requestAnimationFrame(sizeFrame)
   paint()
 }
 
@@ -407,9 +489,8 @@ $('new-from').onclick = () => open(SCENES.find(s => s.id === 'sandbox'))
 $('home-btn').onclick = () => { engine.pause(); $('home').hidden = false; paint() }
 
 // --- palette --------------------------------------------------------------
-// Generated straight from the registry, so adding a type to registry.js is all
-// it takes to make it placeable. The role is shown because it decides what a
-// node can be wired to.
+// Generated from the registry, so adding a type there is the whole job of
+// making it placeable. The role is shown because it decides what it can wire to.
 
 const ROLE_LABEL = { source: 'gives', router: 'both', sink: 'takes' }
 const GROUPS = [
@@ -446,20 +527,17 @@ for (const [group, types] of GROUPS) {
   }
 }
 
-// --- sandbox editor -------------------------------------------------------
-// The scene is already data, which is the only reason this is a small feature
-// rather than a project: edit the JSON, validate, hand it to the engine.
+// --- scene source ---------------------------------------------------------
 
 let editing = false
 let edTimer = null
 
 function serialize(def) {
-  // Drop what the runtime adds back on load, so what you edit is what a scene
-  // file would actually contain.
-  const { nodes, edges, ...rest } = def
+  const { nodes, edges, sections, ...rest } = def
   const out = { ...rest }
   if (nodes?.length) out.nodes = nodes
   if (edges?.length) out.edges = edges
+  if (sections?.length) out.sections = sections
   return JSON.stringify(out, null, 2)
 }
 
@@ -502,6 +580,7 @@ $('edit').onclick = () => {
   $('editor').hidden = !editing
   $('edit').setAttribute('aria-pressed', String(editing))
   if (editing) openEditor()
+  requestAnimationFrame(sizeFrame)
 }
 
 $('ed-text').addEventListener('input', () => {
@@ -511,7 +590,7 @@ $('ed-text').addEventListener('input', () => {
 
 // keep In flight ticking even while idle
 setInterval(paint, 120)
-paint()
+open(current)
 </script>
 </body>
 </html>
