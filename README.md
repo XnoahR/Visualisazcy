@@ -199,8 +199,23 @@ what a straight line at constant speed measures. That matters, because the claim
 of the piece is that the difference is visible in the trace, so the figures had
 better come out of the trace.
 
-Two cuts of the same material: a 31s lesson and a 9.5s reel. Same lanes, same
-measurements, different pacing.
+### One frame, not a slideshow
+
+A ten-second clip cannot afford a page change. Layout is therefore computed from
+the **union of every step**, never from the current one: panels keep their slot
+from the first frame and fill in rather than arriving, so nothing re-flows.
+
+| | beat 1 | beat 3 |
+|---|---|---|
+| ![](docs/beat1.png) | traces drawing, metrics `—` | values filled, verdicts in their slots |
+
+Lanes are identical across all three steps (2, 2, 2). Only the state moves.
+
+Each lane also draws at **its own measured pace**: the script's 120 ms against a
+person's 1428 ms means its trace is finished while the other is still curving.
+Stepping through pages hid that; one still frame shows it.
+
+Two cuts of the same material: a 31s lesson and a 10s reel.
 
 ## Starting
 

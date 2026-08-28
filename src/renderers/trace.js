@@ -22,10 +22,23 @@ registerRenderer('trace', (s, sim, chrome) => {
   const step = chrome ? scene.steps[chrome.index - 1] : scene.steps?.[0]
   if (!step) return
 
-  const visible = scene.lanes.filter(l => (step.lanes || []).includes(l.id))
+  // Layout is computed from the UNION of every step, never from this one. A
+  // composition that re-flows when a panel arrives reads as a page change, and
+  // a ten-second clip cannot afford one: the reference work keeps the frame
+  // still and lets only the state move.
+  const allLanes = new Set()
+  const allPanels = new Set()
+  for (const st of scene.steps || [step]) {
+    for (const id of st.lanes || []) allLanes.add(id)
+    for (const p of st.panels || []) allPanels.add(p)
+  }
+
+  const visible = scene.lanes.filter(l => allLanes.has(l.id))
   if (!visible.length) return
 
-  const panels = step.panels || []
+  const panels = [...allPanels]                       // for geometry
+  const live = new Set(step.panels || [])             // for what is filled in
+  const laneLive = new Set(step.lanes || [])
   const enter = chrome ? clamp01(chrome.enter / 0.5) : 1
 
   // How much of each trace is drawn. 'play' ties it to the step's own progress,
@@ -33,6 +46,12 @@ registerRenderer('trace', (s, sim, chrome) => {
   const drawn = step.trace === 'play'
     ? easeOutCubic(clamp01((chrome ? chrome.progress : 1) / 0.72))
     : (typeof step.trace === 'number' ? step.trace : 1)
+
+  // Each lane draws at its own measured pace. The script's 120ms against a
+  // person's 1428ms is the most legible fact in the whole piece, and stepping
+  // through pages hid it — on one still frame it can simply be shown.
+  const slowest = Math.max(...visible.map(l => l.metrics?.duration || 1))
+  const paceOf = (lane) => clamp01(drawn * (slowest / (lane.metrics?.duration || slowest)))
 
   const portrait = H > W
   const left = s.gutter * W
@@ -72,12 +91,15 @@ registerRenderer('trace', (s, sim, chrome) => {
 
   function paintLane({ lane, x, y, w, h }) {
     const tone = s.theme[lane.tone] || s.theme.accent
+    // A lane the step has not reached yet is drawn as an empty container in its
+    // final position, so nothing moves when it arrives.
+    const laneOn = laneLive.has(lane.id)
     // Whatever the panels do not need, the trace box gets — with a floor, so a
     // crowded frame shrinks the picture rather than pushing it off the edge.
     const boxH = Math.max(h * 0.22, h - panelHeight(lane))
 
     ctx.save()
-    ctx.globalAlpha = easeOutCubic(enter)
+    ctx.globalAlpha = easeOutCubic(enter) * (laneOn ? 1 : 0.25)
 
     // --- lane title -------------------------------------------------------
     s.letterSpace(2.2 * S)
@@ -108,7 +130,8 @@ registerRenderer('trace', (s, sim, chrome) => {
 
     const P = (p) => ({ x: x + p.x * w, y: y + p.y * boxH })
     const pts = lane.points
-    const head = Math.max(1, Math.floor(drawn * (pts.length - 1)))
+    const pace = paceOf(lane)
+    const head = Math.max(1, Math.floor(pace * (pts.length - 1)))
 
     // --- the target ------------------------------------------------------
     const target = P(pts[pts.length - 1])
@@ -147,7 +170,7 @@ registerRenderer('trace', (s, sim, chrome) => {
     s.letterSpace(0)
 
     // --- the straight line, for comparison --------------------------------
-    if (drawn > 0.02) {
+    if (laneOn && pace > 0.02) {
       const a = P(pts[0]), b = P(pts[pts.length - 1])
       ctx.strokeStyle = INK_GUIDE
       ctx.lineWidth = 1
@@ -160,7 +183,7 @@ registerRenderer('trace', (s, sim, chrome) => {
     }
 
     // --- the trace itself: the one solid stroke in the frame --------------
-    if (drawn > 0.005) {
+    if (laneOn && pace > 0.005) {
       ctx.strokeStyle = tone
       ctx.lineWidth = 1.6
       ctx.lineJoin = 'round'
@@ -187,7 +210,7 @@ registerRenderer('trace', (s, sim, chrome) => {
       ctx.beginPath()
       ctx.arc(c.x, c.y, 2.6 * S, 0, Math.PI * 2)
       ctx.fill()
-      if (drawn < 0.999) {
+      if (pace < 0.999) {
         ctx.strokeStyle = tone
         ctx.globalAlpha *= 0.45
         ctx.lineWidth = 1
@@ -200,13 +223,13 @@ registerRenderer('trace', (s, sim, chrome) => {
 
     // --- panels -----------------------------------------------------------
     let py = y + boxH + 26 * S
-    if (panels.includes('metrics')) py = paintMetrics(lane, x, py, w, tone)
-    if (panels.includes('score')) py = paintScore(lane, x, py, w, tone)
-    if (panels.includes('verdict')) paintVerdict(lane, x, py, w)
+    if (panels.includes('metrics')) py = paintMetrics(lane, x, py, w, tone, laneOn && live.has('metrics'))
+    if (panels.includes('score')) py = paintScore(lane, x, py, w, tone, laneOn && live.has('score'))
+    if (panels.includes('verdict') && laneOn && live.has('verdict')) paintVerdict(lane, x, py, w)
     ctx.restore()
   }
 
-  function paintMetrics(lane, x, y, w, tone) {
+  function paintMetrics(lane, x, y, w, tone, on) {
     const m = lane.metrics
     const rows = [
       ['PATH VS STRAIGHT', m.tortuosity.toFixed(3), m.tortuosity > 1.001],
@@ -223,9 +246,9 @@ registerRenderer('trace', (s, sim, chrome) => {
       ctx.fillText(label, x, y)
 
       ctx.font = `600 ${Math.max(9.5, 11 * S)}px ${s.theme.fontMono}`
-      ctx.fillStyle = notable ? tone : s.theme.textDim
+      ctx.fillStyle = on ? (notable ? tone : s.theme.textDim) : 'rgba(255,255,255,0.10)'
       ctx.textAlign = 'right'
-      ctx.fillText(value, x + w, y)
+      ctx.fillText(on ? value : '—', x + w, y)
       s.letterSpace(0)
 
       ctx.strokeStyle = INK_GUIDE
@@ -239,7 +262,7 @@ registerRenderer('trace', (s, sim, chrome) => {
     return y + 12 * S
   }
 
-  function paintScore(lane, x, y, w, tone) {
+  function paintScore(lane, x, y, w, tone, on = true) {
     s.letterSpace(1.5 * S)
     ctx.font = `500 ${Math.max(8, 8.5 * S)}px ${s.theme.fontMono}`
     ctx.fillStyle = s.theme.textMute
@@ -248,16 +271,18 @@ registerRenderer('trace', (s, sim, chrome) => {
     s.letterSpace(0)
 
     ctx.font = `700 ${Math.max(15, 19 * S)}px ${s.theme.fontDisplay}`
-    ctx.fillStyle = tone
+    ctx.fillStyle = on ? tone : 'rgba(255,255,255,0.10)'
     ctx.textAlign = 'right'
-    ctx.fillText(lane.score.toFixed(2), x + w, y + 2 * S)
+    ctx.fillText(on ? lane.score.toFixed(2) : '—', x + w, y + 2 * S)
 
     const by = y + 13 * S
     ctx.strokeStyle = INK_GUIDE
     ctx.lineWidth = 1
     ctx.strokeRect(x, by, w, 5 * S)
-    ctx.fillStyle = tone
-    ctx.fillRect(x, by, Math.max(1, w * lane.score), 5 * S)
+    if (on) {
+      ctx.fillStyle = tone
+      ctx.fillRect(x, by, Math.max(1, w * lane.score), 5 * S)
+    }
 
     // the threshold, marked rather than described
     const tx = x + w * 0.5
