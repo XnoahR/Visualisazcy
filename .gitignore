@@ -4,3 +4,6 @@ node_modules/
 
 # research frames captured from someone else material, kept local only
 docs/reference/
+
+# the seeded design-canvas payload is 2.5MB of editor code, rebuildable from the artboards
+design/visualizcy-app.html

@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualizcy — app mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#08090d; --edge:rgba(255,255,255,.055); --dim:#9498ab; --mute:#5a5f74; --accent:#6ea0ff; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #050609; color: #f5f6fa;
+    font-family: "Space Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  header {
+    position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 20px;
+    padding: 13px 26px; background: rgba(5,6,9,.94); border-bottom: 1px solid var(--edge);
+    backdrop-filter: blur(8px); flex-wrap: wrap;
+  }
+  h1 { font-size: 13.5px; font-weight: 700; margin: 0; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav a {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px;
+    color: var(--dim); text-decoration: none; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid transparent;
+  }
+  nav a:hover { color: #f5f6fa; background: rgba(255,255,255,.05); border-color: var(--edge); }
+  .zoom { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+  .zoom span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; color: var(--mute); }
+  input[type=range] { width: 150px; accent-color: var(--accent); }
+  main { padding: 30px 26px 90px; display: flex; flex-direction: column; gap: 46px; }
+  section { scroll-margin-top: 74px; }
+  .cap { display: flex; align-items: baseline; gap: 12px; margin-bottom: 13px; flex-wrap: wrap; }
+  .num { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; color: var(--accent); letter-spacing: .1em; }
+  .ttl { font-size: 14px; font-weight: 600; }
+  .note { font-size: 12px; color: var(--mute); }
+  .board {
+    width: 1440px; height: 900px; flex: none; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.13); border-radius: 10px;
+    box-shadow: 0 22px 60px rgba(0,0,0,.55);
+    transform-origin: top left;
+  }
+  .wrapscale { overflow: hidden; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Visualizcy — app mockup</h1>
+  <nav>
+      <a href="#b1">01 Board — editing</a>
+      <a href="#b2">02 Object selected</a>
+      <a href="#b3">03 Story mode</a>
+      <a href="#b4">04 Export framing</a>
+  </nav>
+  <div class="zoom">
+    <span>zoom</span>
+    <input id="z" type="range" min="30" max="100" value="70">
+    <span id="zv">70%</span>
+  </div>
+</header>
+<main>
+
+  <section id="b1">
+    <div class="cap">
+      <span class="num">01</span>
+      <span class="ttl">Board — editing</span>
+      <span class="note">Palette, canvas, collapsed inspector. The everyday view.</span>
+    </div>
+    <div class="board"><div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #08090d; color: #f5f6fa; overflow: hidden">
+
+  <!-- toolbar -->
+  <div style="height: 52px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.055); background: #0b0d13">
+    <div style="display: flex; align-items: center; gap: 9px">
+      <div style="width: 22px; height: 22px; border-radius: 6px; background: #6ea0ff1f; border: 1px solid #6ea0ff55; display: grid; place-items: center">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" stroke-width="2" stroke-linecap="round">
+          <circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/>
+          <path d="M7.3 11l9.4-4M7.3 13l9.4 4"/>
+        </svg>
+      </div>
+      <span style="font-size: 13.5px; font-weight: 700; letter-spacing: -.01em">Visualizcy</span>
+    </div>
+
+    <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.055)"></div>
+
+    <div style="display: flex; align-items: center; gap: 6px">
+      <div style="display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 8px; background: #6ea0ff1a; border: 1px solid #6ea0ff59">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="#6ea0ff"><path d="M7 4l13 8-13 8z"/></svg>
+        <span style="font-size: 12px; font-weight: 600; color: #6ea0ff">Play</span>
+      </div>
+      <div style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.055); background: rgba(255,255,255,0.03)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </div>
+      <div style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.055); background: rgba(255,255,255,0.03)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+      </div>
+    </div>
+
+    <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.055)"></div>
+
+    <div style="display: flex; align-items: center; gap: 2px">
+      <div style="display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></div>
+      <span class="mono" style="font-size: 11px; color: #9498ab; min-width: 42px; text-align: center">100%</span>
+      <div style="display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+      <div style="display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; margin-left: 4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></div>
+    </div>
+
+    <div style="flex-grow: 1"></div>
+
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span class="mono" style="font-size: 10.5px; color: #5a5f74">read-write · saved 2m ago</span>
+      <div style="display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.13); background: rgba(255,255,255,0.04)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f5f6fa" stroke-width="2" stroke-linecap="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg>
+        <span style="font-size: 12px; font-weight: 600">Export</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+
+    <!-- palette -->
+    <div style="width: 236px; flex: none; border-right: 1px solid rgba(255,255,255,0.055); background: #0b0d13; display: flex; flex-direction: column">
+      <div style="padding: 14px 14px 10px">
+        <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.055)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5a5f74" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+          <span style="font-size: 11.5px; color: #5a5f74">Search objects</span>
+        </div>
+      </div>
+
+      <div style="padding: 0 14px 14px; display: flex; flex-direction: column; gap: 3px; overflow: hidden">
+
+        <div class="lbl" style="margin: 4px 0 6px">Traffic</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #6ea8ff; background: #6ea8ff22; border: 1px solid #6ea8ff55">WEB</span>
+          <span style="font-size: 11.5px; font-weight: 600">Client</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #6ee7b7">gives</span>
+        </div>
+
+        <div class="lbl" style="margin: 10px 0 6px">Edge</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #06b6d4; background: #06b6d422; border: 1px solid #06b6d455">DNS</span>
+          <span style="font-size: 11.5px; font-weight: 600">DNS</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #f97316; background: #f9731622; border: 1px solid #f9731655">GW</span>
+          <span style="font-size: 11.5px; font-weight: 600">Gateway</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.13); box-shadow: 0 4px 14px rgba(0,0,0,.45)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #fbbf24; background: #fbbf2422; border: 1px solid #fbbf2455">RATE</span>
+          <span style="font-size: 11.5px; font-weight: 600">Limiter</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+
+        <div class="lbl" style="margin: 10px 0 6px">Routing</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #8b5cf6; background: #8b5cf622; border: 1px solid #8b5cf655">ALB</span>
+          <span style="font-size: 11.5px; font-weight: 600">Balancer</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #a78bfa; background: #a78bfa22; border: 1px solid #a78bfa55">QUEUE</span>
+          <span style="font-size: 11.5px; font-weight: 600">Queue</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+
+        <div class="lbl" style="margin: 10px 0 6px">Compute</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #22c55e; background: #22c55e22; border: 1px solid #22c55e55">EC2</span>
+          <span style="font-size: 11.5px; font-weight: 600">Server</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #fca5a5">takes</span>
+        </div>
+
+        <div class="lbl" style="margin: 10px 0 6px">Data</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #f59e0b; background: #f59e0b22; border: 1px solid #f59e0b55">CACHE</span>
+          <span style="font-size: 11.5px; font-weight: 600">Cache</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #60a5fa; background: #60a5fa22; border: 1px solid #60a5fa55">POOL</span>
+          <span style="font-size: 11.5px; font-weight: 600">Pooler</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #5a5f74">both</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055)">
+          <span class="mono" style="width: 28px; height: 21px; border-radius: 5px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #ec4899; background: #ec489922; border: 1px solid #ec489955">RDS</span>
+          <span style="font-size: 11.5px; font-weight: 600">Database</span>
+          <span class="mono" style="margin-left: auto; font-size: 8.5px; color: #fca5a5">takes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- canvas -->
+    <div style="flex-grow: 1; position: relative; background-color: #08090d; background-image: radial-gradient(rgba(255,255,255,0.075) 1px, transparent 0); background-size: 26px 26px; overflow: hidden">
+
+      <svg width="100%" height="100%" style="position: absolute; inset: 0" fill="none">
+        <g stroke="rgba(110,160,255,0.34)" stroke-width="1.5" stroke-linecap="round">
+          <path d="M228 396 L300 396"/>
+          <path d="M470 396 L536 300"/>
+          <path d="M470 396 L536 492"/>
+          <path d="M706 300 L772 396"/>
+          <path d="M706 492 L772 396"/>
+          <path d="M942 396 L1006 300"/>
+          <path d="M942 396 L1006 492"/>
+        </g>
+        <g fill="#6ea0ff">
+          <circle cx="252" cy="396" r="3.4"/><circle cx="276" cy="396" r="3.4"/>
+          <circle cx="558" cy="269" r="3.4"/><circle cx="586" cy="229" r="3.4"/>
+          <circle cx="558" cy="523" r="3.4"/><circle cx="600" cy="583" r="3.4"/>
+          <circle cx="960" cy="371" r="3.4"/><circle cx="978" cy="345" r="3.4"/>
+        </g>
+        <g fill="#6ee7b7">
+          <circle cx="730" cy="330" r="3.4"/><circle cx="752" cy="362" r="3.4"/>
+          <circle cx="1000" cy="484" r="3.4"/>
+        </g>
+        <g fill="#fcd34d">
+          <circle cx="640" cy="450" r="3.4"/><circle cx="668" cy="470" r="3.4"/>
+        </g>
+      </svg>
+
+      <!-- Client -->
+      <div style="position: absolute; left: 60px; top: 365px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #6ea8ff; background: #6ea8ff29; border: 1px solid #6ea8ff61">WEB</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Client</span>
+          <span class="mono" style="font-size: 9.5px; color: #9498ab">120 rps out</span>
+        </span>
+      </div>
+
+      <!-- Gateway -->
+      <div style="position: absolute; left: 302px; top: 365px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #f97316; background: #f9731629; border: 1px solid #f9731661">GW</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Gateway</span>
+          <span class="mono" style="font-size: 9.5px; color: #9498ab">118/3000 rps</span>
+        </span>
+        <svg width="20" height="20" viewBox="0 0 24 24" style="margin-left: auto" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" stroke="rgba(255,255,255,0.12)"/><path d="M12 12V4.5"/></svg>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 6%; height: 3px; border-radius: 2px; background: #6ee7b7"></div></div>
+      </div>
+
+      <!-- Limiter (overloaded) -->
+      <div style="position: absolute; left: 538px; top: 269px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1.6px solid #fca5a5; box-shadow: 0 0 14px rgba(252,165,165,.3), 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #fbbf24; background: #fbbf2429; border: 1px solid #fbbf2461">RATE</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Limiter</span>
+          <span class="mono" style="font-size: 9.5px; color: #fca5a5">60/60 rps</span>
+        </span>
+        <span style="margin-left: auto; width: 8px; height: 38px; border-radius: 3px; background: rgba(255,255,255,0.07); display: flex; align-items: flex-end">
+          <span style="width: 8px; height: 9px; border-radius: 3px; background: #fca5a5"></span>
+        </span>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 100%; height: 3px; border-radius: 2px; background: #fca5a5"></div></div>
+      </div>
+
+      <!-- Cache -->
+      <div style="position: absolute; left: 538px; top: 461px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #f59e0b; background: #f59e0b29; border: 1px solid #f59e0b61">CACHE</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Cache</span>
+          <span class="mono" style="font-size: 9.5px; color: #9498ab">58/500 rps</span>
+        </span>
+        <svg width="22" height="22" viewBox="0 0 24 24" style="margin-left: auto" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.09)" stroke-width="3"/>
+          <path d="M12 3a9 9 0 0 1 7.4 14.1" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 12%; height: 3px; border-radius: 2px; background: #6ee7b7"></div></div>
+      </div>
+
+      <!-- Balancer -->
+      <div style="position: absolute; left: 774px; top: 365px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.13); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #8b5cf6; background: #8b5cf629; border: 1px solid #8b5cf661">ALB</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Balancer</span>
+          <span class="mono" style="font-size: 9.5px; color: #9498ab">96/1000 rps</span>
+        </span>
+        <svg width="20" height="20" viewBox="0 0 24 24" style="margin-left: auto" fill="none" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/><path d="M12 12l6 3.5" stroke="#8b5cf6" stroke-width="2.2"/></svg>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 10%; height: 3px; border-radius: 2px; background: #6ee7b7"></div></div>
+      </div>
+
+      <!-- Server 1 -->
+      <div style="position: absolute; left: 1008px; top: 269px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #22c55e; background: #22c55e29; border: 1px solid #22c55e61">EC2</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Server 1</span>
+          <span class="mono" style="font-size: 9.5px; color: #fcd34d">33/40 rps</span>
+        </span>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 82%; height: 3px; border-radius: 2px; background: #fcd34d"></div></div>
+      </div>
+
+      <!-- Server 2 -->
+      <div style="position: absolute; left: 1008px; top: 461px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); box-shadow: 0 5px 11px rgba(0,0,0,.5); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #22c55e; background: #22c55e29; border: 1px solid #22c55e61">EC2</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12.5px; font-weight: 600">Server 2</span>
+          <span class="mono" style="font-size: 9.5px; color: #6ee7b7">31/40 rps</span>
+        </span>
+        <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 78%; height: 3px; border-radius: 2px; background: #fcd34d"></div></div>
+      </div>
+
+      <!-- drop ghost -->
+      <div style="position: absolute; left: 774px; top: 620px; width: 168px; height: 62px; border-radius: 12px; border: 1.5px dashed #6ea0ff; background: rgba(110,160,255,0.06); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #fbbf24; background: #fbbf2418; border: 1px dashed #fbbf2455">RATE</span>
+        <span style="font-size: 12.5px; font-weight: 600; color: #6ea0ff">Drop to place</span>
+      </div>
+
+      <!-- live counters -->
+      <div style="position: absolute; left: 20px; bottom: 18px; display: flex; gap: 20px; padding: 11px 15px; border-radius: 11px; background: rgba(11,13,19,.92); border: 1px solid rgba(255,255,255,0.055)">
+        <span style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">In flight</span><span class="mono" style="font-size: 15px; font-weight: 600">248</span></span>
+        <span style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Processed</span><span class="mono" style="font-size: 15px; font-weight: 600; color: #6ee7b7">4,180</span></span>
+        <span style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Dropped</span><span class="mono" style="font-size: 15px; font-weight: 600; color: #fca5a5">612</span></span>
+        <span style="display: flex; flex-direction: column; gap: 3px"><span class="lbl">Overloaded</span><span class="mono" style="font-size: 15px; font-weight: 600; color: #fcd34d">1</span></span>
+      </div>
+    </div>
+
+    <!-- inspector rail, collapsed -->
+    <div style="width: 46px; flex: none; border-left: 1px solid rgba(255,255,255,0.055); background: #0b0d13; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 12px">
+      <div style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.055)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+      </div>
+      <div style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5a5f74" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 4v16"/></svg>
+      </div>
+      <div style="display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5a5f74" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- status bar -->
+  <div style="height: 30px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 16px; border-top: 1px solid rgba(255,255,255,0.055); background: #0b0d13">
+    <span class="mono" style="font-size: 10px; color: #5a5f74">9 objects · 10 connections</span>
+    <span class="mono" style="font-size: 10px; color: #5a5f74">drag ＋ to connect · right-click to remove</span>
+    <span style="flex-grow: 1"></span>
+    <span class="mono" style="font-size: 10px; color: #5a5f74">frame 16:9</span>
+  </div>
+</div></div>
+  </section>
+
+  <section id="b2">
+    <div class="cap">
+      <span class="num">02</span>
+      <span class="ttl">Object selected</span>
+      <span class="note">A node selected: properties, wiring rule, hit rate, connections.</span>
+    </div>
+    <div class="board"><div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #08090d; color: #f5f6fa; overflow: hidden">
+
+  <div style="height: 52px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.055); background: #0b0d13">
+    <span style="font-size: 13.5px; font-weight: 700">Visualizcy</span>
+    <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.055)"></div>
+    <div style="display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.055); background: rgba(255,255,255,0.03)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="#9498ab"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      <span style="font-size: 12px; font-weight: 600; color: #9498ab">Pause</span>
+    </div>
+    <span class="mono" style="font-size: 11px; color: #5a5f74">157%</span>
+    <div style="flex-grow: 1"></div>
+    <span class="mono" style="font-size: 10.5px; color: #5a5f74">1 object selected</span>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+
+    <!-- palette, collapsed to icons to give the inspector room -->
+    <div style="width: 56px; flex: none; border-right: 1px solid rgba(255,255,255,0.055); background: #0b0d13; display: flex; flex-direction: column; align-items: center; gap: 7px; padding-top: 14px">
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #6ea8ff; background: #6ea8ff22; border: 1px solid #6ea8ff55">WEB</span>
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #f97316; background: #f9731622; border: 1px solid #f9731655">GW</span>
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #8b5cf6; background: #8b5cf622; border: 1px solid #8b5cf655">ALB</span>
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #f59e0b; background: #f59e0b3d; border: 1px solid #f59e0b99">CACHE</span>
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #22c55e; background: #22c55e22; border: 1px solid #22c55e55">EC2</span>
+      <span class="mono" style="width: 36px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 7.5px; font-weight: 600; color: #ec4899; background: #ec489922; border: 1px solid #ec489955">RDS</span>
+    </div>
+
+    <!-- canvas, zoomed in on the selection -->
+    <div style="flex-grow: 1; position: relative; background-color: #08090d; background-image: radial-gradient(rgba(255,255,255,0.075) 1px, transparent 0); background-size: 41px 41px; overflow: hidden">
+
+      <svg width="100%" height="100%" style="position: absolute; inset: 0" fill="none">
+        <g stroke="rgba(110,160,255,0.34)" stroke-width="2.4" stroke-linecap="round">
+          <path d="M276 300 L336 392"/>
+          <path d="M612 392 L716 300"/>
+          <path d="M612 440 L716 540"/>
+        </g>
+        <g fill="#6ea0ff">
+          <circle cx="292" cy="323" r="5"/><circle cx="314" cy="352" r="5"/>
+          <circle cx="744" cy="278" r="5"/>
+        </g>
+        <g fill="#fcd34d"><circle cx="660" cy="482" r="5"/><circle cx="694" cy="514" r="5"/></g>
+      </svg>
+
+      <!-- upstream -->
+      <div style="position: absolute; left: 14px; top: 246px; width: 262px; height: 97px; border-radius: 19px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 16px; padding: 0 19px">
+        <span class="mono" style="width: 53px; height: 53px; border-radius: 14px; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #f97316; background: #f9731629; border: 1px solid #f9731661">GW</span>
+        <span style="display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 19.5px; font-weight: 600">Gateway</span>
+          <span class="mono" style="font-size: 15px; color: #9498ab">118/3000</span>
+        </span>
+      </div>
+
+      <!-- SELECTED: Cache -->
+      <div style="position: absolute; left: 338px; top: 344px; width: 262px; height: 97px">
+        <div style="position: absolute; inset: -7px; border-radius: 25px; border: 1.5px solid #6ea0ff; background: rgba(110,160,255,0.05)"></div>
+        <div style="position: absolute; inset: 0; border-radius: 19px; background: #14171f; border: 1px solid rgba(255,255,255,0.13); display: flex; align-items: center; gap: 16px; padding: 0 19px">
+          <span class="mono" style="width: 53px; height: 53px; border-radius: 14px; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #f59e0b; background: #f59e0b29; border: 1px solid #f59e0b61">CACHE</span>
+          <span style="display: flex; flex-direction: column; gap: 3px">
+            <span style="font-size: 19.5px; font-weight: 600">Cache</span>
+            <span class="mono" style="font-size: 15px; color: #9498ab">58/500 rps</span>
+          </span>
+          <svg width="34" height="34" viewBox="0 0 24 24" style="margin-left: auto" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.09)" stroke-width="3"/>
+            <path d="M12 3a9 9 0 0 1 7.4 14.1" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          <div style="position: absolute; left: 19px; right: 19px; bottom: 8px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07)"><div style="width: 12%; height: 5px; border-radius: 3px; background: #6ee7b7"></div></div>
+        </div>
+        <!-- + handles -->
+        <div style="position: absolute; left: -33px; top: 36px; width: 22px; height: 22px; border-radius: 11px; background: #08090d; border: 1.2px solid #6ea0ff; display: grid; place-items: center"><svg width="11" height="11" viewBox="0 0 24 24" stroke="#6ea0ff" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>
+        <div style="position: absolute; right: -33px; top: 36px; width: 22px; height: 22px; border-radius: 11px; background: #08090d; border: 1.2px solid #6ea0ff; display: grid; place-items: center"><svg width="11" height="11" viewBox="0 0 24 24" stroke="#6ea0ff" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>
+        <div style="position: absolute; left: 120px; top: -33px; width: 22px; height: 22px; border-radius: 11px; background: #08090d; border: 1.2px solid #6ea0ff; display: grid; place-items: center"><svg width="11" height="11" viewBox="0 0 24 24" stroke="#6ea0ff" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>
+        <div style="position: absolute; left: 120px; bottom: -33px; width: 22px; height: 22px; border-radius: 11px; background: #08090d; border: 1.2px solid #6ea0ff; display: grid; place-items: center"><svg width="11" height="11" viewBox="0 0 24 24" stroke="#6ea0ff" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></div>
+      </div>
+
+      <!-- downstream -->
+      <div style="position: absolute; left: 718px; top: 246px; width: 262px; height: 97px; border-radius: 19px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 16px; padding: 0 19px">
+        <span class="mono" style="width: 53px; height: 53px; border-radius: 14px; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #ec4899; background: #ec489929; border: 1px solid #ec489961">RDS</span>
+        <span style="display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 19.5px; font-weight: 600">Database</span>
+          <span class="mono" style="font-size: 15px; color: #9498ab">12/60</span>
+        </span>
+      </div>
+
+      <div style="position: absolute; left: 718px; top: 490px; width: 262px; height: 97px; border-radius: 19px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 16px; padding: 0 19px">
+        <span class="mono" style="width: 53px; height: 53px; border-radius: 14px; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #6ea8ff; background: #6ea8ff29; border: 1px solid #6ea8ff61">WEB</span>
+        <span style="display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 19.5px; font-weight: 600">Client</span>
+          <span class="mono" style="font-size: 15px; color: #fcd34d">46 hits back</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- inspector -->
+    <div style="width: 316px; flex: none; border-left: 1px solid rgba(255,255,255,0.055); background: #0b0d13; display: flex; flex-direction: column">
+
+      <div style="padding: 15px 16px; border-bottom: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 11px">
+        <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #f59e0b; background: #f59e0b29; border: 1px solid #f59e0b61">CACHE</span>
+        <span style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 13.5px; font-weight: 600">Cache</span>
+          <span class="mono" style="font-size: 9.5px; color: #5a5f74">cache · in-memory</span>
+        </span>
+      </div>
+
+      <div style="padding: 16px; display: flex; flex-direction: column; gap: 17px">
+
+        <div class="field">
+          <span class="lbl">Label</span>
+          <div class="input"><span>Cache</span></div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Wiring</span>
+          <div style="display: flex; gap: 4px; padding: 3px; border-radius: 9px; background: #08090d; border: 1px solid rgba(255,255,255,0.055)">
+            <span style="flex-grow: 1; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; color: #5a5f74">gives</span>
+            <span style="flex-grow: 1; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; color: #5a5f74">takes</span>
+            <span style="flex-grow: 1; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 0; border-radius: 6px; background: rgba(110,160,255,0.16); color: #6ea0ff">both</span>
+          </div>
+          <span style="font-size: 10.5px; color: #5a5f74; line-height: 1.5">A router accepts connections in and out. Sources refuse inbound; sinks refuse outbound.</span>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Capacity</span>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <div class="input mono" style="flex-grow: 1; justify-content: space-between"><span>500</span><span style="color: #5a5f74; font-size: 10px">rps</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Hit rate</span>
+          <div style="display: flex; align-items: center; gap: 11px">
+            <div style="flex-grow: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); position: relative">
+              <div style="width: 80%; height: 4px; border-radius: 2px; background: #6ee7b7"></div>
+              <div style="position: absolute; left: 80%; top: -5px; width: 14px; height: 14px; margin-left: -7px; border-radius: 7px; background: #f5f6fa; border: 2px solid #6ee7b7"></div>
+            </div>
+            <span class="mono" style="font-size: 12px; font-weight: 600; min-width: 32px; text-align: right">80%</span>
+          </div>
+          <span style="font-size: 10.5px; color: #5a5f74; line-height: 1.5">Eight in ten requests turn around here and never reach the database.</span>
+        </div>
+
+        <div style="height: 1px; background: rgba(255,255,255,0.055)"></div>
+
+        <div class="field">
+          <span class="lbl">Live</span>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+            <div style="padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 3px">
+              <span class="lbl">Hits</span><span class="mono" style="font-size: 15px; font-weight: 600; color: #6ee7b7">1,204</span>
+            </div>
+            <div style="padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 3px">
+              <span class="lbl">Misses</span><span class="mono" style="font-size: 15px; font-weight: 600">301</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Connections</span>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M4 12h14"/><path d="M13 7l5 5-5 5"/></svg>
+              <span style="font-size: 11.5px; color: #9498ab">from</span>
+              <span style="font-size: 11.5px; font-weight: 600">Gateway</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M20 12H6"/><path d="M11 7l-5 5 5 5"/></svg>
+              <span style="font-size: 11.5px; color: #9498ab">to</span>
+              <span style="font-size: 11.5px; font-weight: 600">Database</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 8px; border: 1px solid rgba(252,165,165,0.28)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2" stroke-linecap="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/></svg>
+          <span style="font-size: 11.5px; font-weight: 600; color: #fca5a5">Remove object</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+  </section>
+
+  <section id="b3">
+    <div class="cap">
+      <span class="num">03</span>
+      <span class="ttl">Story mode</span>
+      <span class="note">Composed frame, step inspector, timeline strip.</span>
+    </div>
+    <div class="board"><div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #08090d; color: #f5f6fa; overflow: hidden">
+
+  <div style="height: 52px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.055); background: #0b0d13">
+    <span style="font-size: 13.5px; font-weight: 700">Visualizcy</span>
+    <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.055)"></div>
+    <div style="display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: #08090d; border: 1px solid rgba(255,255,255,0.055)">
+      <span style="font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 6px; color: #5a5f74">Board</span>
+      <span style="font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 6px; background: rgba(110,160,255,0.16); color: #6ea0ff">Story</span>
+    </div>
+    <span class="mono" style="font-size: 11px; color: #9498ab">From one server to a bottleneck</span>
+    <div style="flex-grow: 1"></div>
+    <span class="mono" style="font-size: 10.5px; color: #5a5f74">step 2 of 6 · 4.6s</span>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+
+    <!-- composed frame preview -->
+    <div style="flex-grow: 1; display: grid; place-items: center; padding: 26px; background: #05060a">
+      <div style="width: 1006px; height: 566px; position: relative; background-color: #08090d; background-image: radial-gradient(rgba(255,255,255,0.075) 1px, transparent 0); background-size: 26px 26px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.13); overflow: hidden">
+
+        <div style="position: absolute; left: 0; top: 0; width: 34%; height: 2px; background: rgba(110,160,255,.5)"></div>
+
+        <div style="position: absolute; left: 29px; top: 24px; right: 29px; display: flex; justify-content: space-between; align-items: flex-start">
+          <div style="display: flex; flex-direction: column; gap: 9px">
+            <span class="mono" style="font-size: 11px; letter-spacing: .22em; color: #9498ab">TRAFFIC TRIPLES</span>
+            <div style="width: 264px; height: 1px; background: rgba(255,255,255,0.055)"></div>
+            <span style="font-size: 14.5px; font-weight: 500; max-width: 430px; line-height: 1.45">Same server, seventy requests a second arriving. Watch the meter fill and the border go red.</span>
+          </div>
+          <span class="mono" style="font-size: 11px; letter-spacing: .22em; font-weight: 600; opacity: .82">VISUALIZCY</span>
+        </div>
+
+        <!-- gutter column -->
+        <div style="position: absolute; left: 29px; top: 168px; display: flex; flex-direction: column; gap: 26px">
+          <div style="display: flex; flex-direction: column; gap: 5px">
+            <span style="font-size: 42px; font-weight: 700; color: #fca5a5; line-height: 1">70</span>
+            <span style="font-size: 12.5px; color: #9498ab">arriving every second</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px">
+            <span style="font-size: 42px; font-weight: 700; color: #9498ab; line-height: 1">40</span>
+            <span style="font-size: 12.5px; color: #9498ab">it can actually take</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 9px">
+            <div style="display: flex; width: 222px; height: 7px; border-radius: 1px; overflow: hidden">
+              <span style="width: 57%; background: #6ee7b7"></span><span style="width: 43%; background: #fca5a5"></span>
+            </div>
+            <span style="font-size: 12px; color: #5a5f74">the rest is dropped</span>
+          </div>
+          <span style="font-size: 13px; color: #9498ab; max-width: 232px; line-height: 1.5">Nothing crashed. It just stopped answering thirty people a second.</span>
+        </div>
+
+        <!-- dimmed client + focused server -->
+        <svg width="100%" height="100%" style="position: absolute; inset: 0" fill="none">
+          <path d="M566 283 L722 283" stroke="rgba(110,160,255,0.34)" stroke-width="1.6" stroke-linecap="round"/>
+          <g fill="#6ea0ff"><circle cx="600" cy="283" r="3.6"/><circle cx="628" cy="283" r="3.6"/><circle cx="656" cy="283" r="3.6"/><circle cx="684" cy="283" r="3.6"/></g>
+        </svg>
+
+        <div style="position: absolute; left: 398px; top: 252px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); opacity: .2; display: flex; align-items: center; gap: 10px; padding: 0 12px">
+          <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #6ea8ff; background: #6ea8ff29; border: 1px solid #6ea8ff61">WEB</span>
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12.5px; font-weight: 600">Client</span><span class="mono" style="font-size: 9.5px; color: #9498ab">User device</span></span>
+        </div>
+
+        <div style="position: absolute; left: 724px; top: 252px; width: 168px; height: 62px; border-radius: 12px; background: #14171f; border: 1.6px solid #fca5a5; box-shadow: 0 0 15px rgba(252,165,165,.32); display: flex; align-items: center; gap: 10px; padding: 0 12px">
+          <span class="mono" style="width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 8.5px; font-weight: 600; color: #22c55e; background: #22c55e29; border: 1px solid #22c55e61">EC2</span>
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12.5px; font-weight: 600">Server 1</span><span class="mono" style="font-size: 9.5px; color: #fca5a5">70/40 rps</span></span>
+          <div style="position: absolute; left: 12px; right: 12px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 100%; height: 3px; border-radius: 2px; background: #fca5a5"></div></div>
+        </div>
+
+        <div style="position: absolute; left: 29px; bottom: 24px; right: 29px; display: flex; justify-content: space-between; align-items: center">
+          <span style="display: flex; align-items: center; gap: 15px">
+            <span style="width: 17px; height: 1.5px; background: #fcd34d"></span>
+            <span class="mono" style="font-size: 11px; letter-spacing: .22em; color: #9498ab">FROM ONE SERVER TO A BOTTLENECK</span>
+          </span>
+          <span class="mono" style="font-size: 11px; letter-spacing: .22em; color: #5a5f74">2 / 6</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- step inspector -->
+    <div style="width: 296px; flex: none; border-left: 1px solid rgba(255,255,255,0.055); background: #0b0d13; padding: 16px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span class="lbl">Step label</span>
+        <div style="height: 30px; border-radius: 8px; background: #08090d; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; padding: 0 10px; font-size: 12px">Traffic triples</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span class="lbl">Narration</span>
+        <div style="min-height: 62px; border-radius: 8px; background: #08090d; border: 1px solid rgba(255,255,255,0.055); padding: 9px 10px; font-size: 12px; line-height: 1.5; color: #9498ab">Same server, seventy requests a second arriving. Watch the meter fill and the border go red.</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span class="lbl">Duration</span>
+          <div class="mono" style="height: 30px; border-radius: 8px; background: #08090d; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px"><span>4600</span><span style="color: #5a5f74; font-size: 10px">ms</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span class="lbl">Gutter</span>
+          <div class="mono" style="height: 30px; border-radius: 8px; background: #08090d; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 12px"><span>0.33</span><span style="color: #5a5f74; font-size: 10px">w</span></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">On screen</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 5px">
+          <span style="font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px; background: rgba(110,160,255,0.16); color: #6ea0ff">Client</span>
+          <span style="font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px; background: rgba(110,160,255,0.16); color: #6ea0ff">Server 1</span>
+          <span style="font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px; background: rgba(255,255,255,0.04); color: #5a5f74">+ add</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Focus</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 5px">
+          <span style="font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 6px; background: rgba(252,211,77,0.16); color: #fcd34d">Server 1</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Annotations</span>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)"><span class="mono" style="font-size: 9px; color: #5a5f74">STAT</span><span style="font-size: 11.5px">70 arriving</span></div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)"><span class="mono" style="font-size: 9px; color: #5a5f74">STAT</span><span style="font-size: 11.5px">40 it can take</span></div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)"><span class="mono" style="font-size: 9px; color: #5a5f74">BAR</span><span style="font-size: 11.5px">the rest is dropped</span></div>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)"><span class="mono" style="font-size: 9px; color: #5a5f74">NOTE</span><span style="font-size: 11.5px">Nothing crashed…</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- timeline strip -->
+  <div style="height: 152px; flex: none; border-top: 1px solid rgba(255,255,255,0.055); background: #0b0d13; padding: 13px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <span class="lbl">Timeline</span>
+      <span class="mono" style="font-size: 10px; color: #5a5f74">26.0s total</span>
+      <span style="flex-grow: 1"></span>
+      <span style="display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.055); background: rgba(255,255,255,0.03)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span style="font-size: 11px; font-weight: 600; color: #9498ab">Add step</span>
+      </span>
+    </div>
+
+    <div style="display: flex; gap: 9px; align-items: stretch">
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #5a5f74">01 · 4.2s</span>
+        <span style="font-size: 11.5px; font-weight: 600">Step one · the shape</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"></div>
+      </div>
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1.4px solid #6ea0ff; box-shadow: 0 0 0 3px rgba(110,160,255,.1); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #6ea0ff">02 · 4.6s</span>
+        <span style="font-size: 11.5px; font-weight: 600">Traffic triples</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"><div style="width: 46%; height: 3px; border-radius: 2px; background: #6ea0ff"></div></div>
+      </div>
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #5a5f74">03 · 4.6s</span>
+        <span style="font-size: 11.5px; font-weight: 600">Spread the load</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"></div>
+      </div>
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #5a5f74">04 · 4.2s</span>
+        <span style="font-size: 11.5px; font-weight: 600">Lose one</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"></div>
+      </div>
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #5a5f74">05 · 4.4s</span>
+        <span style="font-size: 11.5px; font-weight: 600">Lose another</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"></div>
+      </div>
+      <div style="width: 168px; padding: 9px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; flex-direction: column; gap: 5px">
+        <span class="mono" style="font-size: 9px; color: #5a5f74">06 · 5.2s</span>
+        <span style="font-size: 11.5px; font-weight: 600">The real bottleneck</span>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,0.07)"></div>
+      </div>
+      <div style="width: 76px; border-radius: 9px; border: 1.5px dashed rgba(255,255,255,0.13); display: grid; place-items: center">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5a5f74" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+    </div>
+  </div>
+</div></div>
+  </section>
+
+  <section id="b4">
+    <div class="cap">
+      <span class="num">04</span>
+      <span class="ttl">Export framing</span>
+      <span class="note">Crop overlay per aspect, output and resolution.</span>
+    </div>
+    <div class="board"><div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: #08090d; color: #f5f6fa; overflow: hidden">
+
+  <div style="height: 52px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.055); background: #0b0d13">
+    <span style="font-size: 13.5px; font-weight: 700">Visualizcy</span>
+    <div style="width: 1px; height: 22px; background: rgba(255,255,255,0.055)"></div>
+    <span class="mono" style="font-size: 11px; color: #9498ab">From one server to a bottleneck</span>
+    <div style="flex-grow: 1"></div>
+    <div style="display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 8px; background: #6ea0ff1a; border: 1px solid #6ea0ff59">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" stroke-width="2" stroke-linecap="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 20h16"/></svg>
+      <span style="font-size: 12px; font-weight: 600; color: #6ea0ff">Export</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0">
+
+    <!-- canvas with framing overlay -->
+    <div style="flex-grow: 1; position: relative; background-color: #05060a; overflow: hidden; display: grid; place-items: center">
+
+      <!-- the board, dimmed outside the crop -->
+      <div style="position: relative; width: 900px; height: 620px">
+
+        <div style="position: absolute; inset: 0; background-color: #08090d; background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 0); background-size: 26px 26px; border-radius: 4px; opacity: .45"></div>
+
+        <!-- 9:16 candidate -->
+        <div style="position: absolute; left: 42px; top: 30px; width: 315px; height: 560px; border: 1px dashed rgba(255,255,255,0.13); border-radius: 3px"></div>
+        <span class="mono" style="position: absolute; left: 42px; top: 8px; font-size: 10px; letter-spacing: .16em; color: #5a5f74">9:16</span>
+
+        <!-- 1:1 candidate -->
+        <div style="position: absolute; left: 385px; top: 176px; width: 268px; height: 268px; border: 1px dashed rgba(255,255,255,0.13); border-radius: 3px"></div>
+        <span class="mono" style="position: absolute; left: 385px; top: 154px; font-size: 10px; letter-spacing: .16em; color: #5a5f74">1:1</span>
+
+        <!-- active 16:9 crop -->
+        <div style="position: absolute; left: 108px; top: 116px; width: 684px; height: 385px; border: 1.6px solid #6ea0ff; border-radius: 3px; box-shadow: 0 0 0 9999px rgba(5,6,10,.62)">
+          <div style="position: absolute; inset: 0; background-color: #08090d; background-image: radial-gradient(rgba(255,255,255,0.075) 1px, transparent 0); background-size: 26px 26px; overflow: hidden">
+
+            <svg width="100%" height="100%" style="position: absolute; inset: 0" fill="none">
+              <path d="M198 192 L288 140" stroke="rgba(110,160,255,0.34)" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M198 200 L288 252" stroke="rgba(110,160,255,0.34)" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M420 140 L500 192" stroke="rgba(110,160,255,0.34)" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M420 252 L500 200" stroke="rgba(110,160,255,0.34)" stroke-width="1.4" stroke-linecap="round"/>
+              <g fill="#6ea0ff"><circle cx="228" cy="174" r="3"/><circle cx="252" cy="160" r="3"/><circle cx="232" cy="220" r="3"/></g>
+              <g fill="#6ee7b7"><circle cx="452" cy="163" r="3"/><circle cx="470" cy="230" r="3"/></g>
+            </svg>
+
+            <div style="position: absolute; left: 22px; top: 18px; display: flex; flex-direction: column; gap: 6px">
+              <span class="mono" style="font-size: 8.5px; letter-spacing: .2em; color: #9498ab">SPREAD THE LOAD</span>
+              <div style="width: 190px; height: 1px; background: rgba(255,255,255,0.055)"></div>
+            </div>
+            <span class="mono" style="position: absolute; right: 22px; top: 18px; font-size: 8.5px; letter-spacing: .2em; opacity: .82">VISUALIZCY</span>
+
+            <div style="position: absolute; left: 34px; top: 168px; width: 122px; height: 45px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 7px; padding: 0 9px">
+              <span class="mono" style="width: 25px; height: 25px; border-radius: 7px; display: grid; place-items: center; font-size: 6px; font-weight: 600; color: #8b5cf6; background: #8b5cf629; border: 1px solid #8b5cf661">ALB</span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 9px; font-weight: 600">Balancer</span><span class="mono" style="font-size: 7px; color: #9498ab">70/1000</span></span>
+            </div>
+            <div style="position: absolute; left: 290px; top: 118px; width: 122px; height: 45px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 7px; padding: 0 9px">
+              <span class="mono" style="width: 25px; height: 25px; border-radius: 7px; display: grid; place-items: center; font-size: 6px; font-weight: 600; color: #22c55e; background: #22c55e29; border: 1px solid #22c55e61">EC2</span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 9px; font-weight: 600">Server 1</span><span class="mono" style="font-size: 7px; color: #6ee7b7">23/40</span></span>
+            </div>
+            <div style="position: absolute; left: 290px; top: 230px; width: 122px; height: 45px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 7px; padding: 0 9px">
+              <span class="mono" style="width: 25px; height: 25px; border-radius: 7px; display: grid; place-items: center; font-size: 6px; font-weight: 600; color: #22c55e; background: #22c55e29; border: 1px solid #22c55e61">EC2</span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 9px; font-weight: 600">Server 2</span><span class="mono" style="font-size: 7px; color: #6ee7b7">23/40</span></span>
+            </div>
+            <div style="position: absolute; left: 500px; top: 174px; width: 122px; height: 45px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055); display: flex; align-items: center; gap: 7px; padding: 0 9px">
+              <span class="mono" style="width: 25px; height: 25px; border-radius: 7px; display: grid; place-items: center; font-size: 6px; font-weight: 600; color: #ec4899; background: #ec489929; border: 1px solid #ec489961">RDS</span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 9px; font-weight: 600">Database</span><span class="mono" style="font-size: 7px; color: #fca5a5">70/30</span></span>
+            </div>
+
+            <span class="mono" style="position: absolute; right: 22px; bottom: 16px; font-size: 8.5px; letter-spacing: .2em; color: #5a5f74">3 / 6</span>
+          </div>
+
+          <!-- crop handles -->
+          <div style="position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 2px; background: #6ea0ff"></div>
+          <div style="position: absolute; right: -5px; top: -5px; width: 10px; height: 10px; border-radius: 2px; background: #6ea0ff"></div>
+          <div style="position: absolute; left: -5px; bottom: -5px; width: 10px; height: 10px; border-radius: 2px; background: #6ea0ff"></div>
+          <div style="position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; border-radius: 2px; background: #6ea0ff"></div>
+          <span class="mono" style="position: absolute; left: 0; top: -24px; font-size: 10px; letter-spacing: .16em; color: #6ea0ff">16:9 · 1920 × 1080</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- export panel -->
+    <div style="width: 316px; flex: none; border-left: 1px solid rgba(255,255,255,0.055); background: #0b0d13; padding: 16px; display: flex; flex-direction: column; gap: 17px">
+
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Frame</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px">
+          <span style="text-align: center; font-size: 11.5px; font-weight: 600; padding: 7px 0; border-radius: 7px; background: rgba(110,160,255,0.16); border: 1px solid #6ea0ff59; color: #6ea0ff">16:9</span>
+          <span style="text-align: center; font-size: 11.5px; font-weight: 600; padding: 7px 0; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); color: #9498ab">1:1</span>
+          <span style="text-align: center; font-size: 11.5px; font-weight: 600; padding: 7px 0; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); color: #9498ab">9:16</span>
+        </div>
+        <span style="font-size: 10.5px; color: #5a5f74; line-height: 1.5">Nodes carry a position per frame, so switching re-lays out rather than crops.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Output</span>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 9px; background: #14171f; border: 1.4px solid #6ea0ff">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15l3.5-4 3 3.5 2-2L18 15"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 600">Still frame</span><span class="mono" style="font-size: 9.5px; color: #5a5f74">PNG · current step</span></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5l5 2.5-5 2.5z"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 600">Story</span><span class="mono" style="font-size: 9.5px; color: #5a5f74">MP4 · all 6 steps · 26.0s</span></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 9px; background: #14171f; border: 1px solid rgba(255,255,255,0.055)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9498ab" stroke-width="2" stroke-linecap="round"><rect x="3" y="7" width="14" height="12" rx="2"/><path d="M7 4h14v12"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 600">Frame sequence</span><span class="mono" style="font-size: 9.5px; color: #5a5f74">PNG · 780 frames @ 30fps</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Resolution</span>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px">
+          <span style="text-align: center; font-size: 11px; font-weight: 600; padding: 6px 0; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); color: #9498ab">1×</span>
+          <span style="text-align: center; font-size: 11px; font-weight: 600; padding: 6px 0; border-radius: 7px; background: rgba(110,160,255,0.16); border: 1px solid #6ea0ff59; color: #6ea0ff">2×</span>
+          <span style="text-align: center; font-size: 11px; font-weight: 600; padding: 6px 0; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); color: #9498ab">3×</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 7px">
+        <span class="lbl">Include</span>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="display: flex; align-items: center; gap: 9px">
+            <span style="width: 15px; height: 15px; border-radius: 4px; background: #6ea0ff; display: grid; place-items: center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#08090d" stroke-width="3.5" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>
+            <span style="font-size: 11.5px">Chrome and step counter</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 9px">
+            <span style="width: 15px; height: 15px; border-radius: 4px; background: #6ea0ff; display: grid; place-items: center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#08090d" stroke-width="3.5" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>
+            <span style="font-size: 11.5px">Annotations</span>
+          </span>
+          <span style="display: flex; align-items: center; gap: 9px">
+            <span style="width: 15px; height: 15px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.13)"></span>
+            <span style="font-size: 11.5px; color: #9498ab">Watermark</span>
+          </span>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1"></div>
+
+      <div style="display: flex; flex-direction: column; gap: 9px">
+        <span class="mono" style="font-size: 10px; color: #5a5f74">Deterministic render · every frame reproducible</span>
+        <div style="height: 36px; border-radius: 9px; background: #6ea0ff; display: grid; place-items: center">
+          <span style="font-size: 12.5px; font-weight: 700; color: #08090d">Render 1920 × 1080</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+  </section>
+</main>
+<script>
+  // Boards are authored at 1440x900; scale them to fit whatever window this is
+  // opened in, and let the slider override.
+  const z = document.getElementById('z'), zv = document.getElementById('zv');
+  function apply(pct) {
+    const s = pct / 100;
+    zv.textContent = pct + '%';
+    for (const b of document.querySelectorAll('.board')) {
+      b.style.transform = 'scale(' + s + ')';
+      b.parentElement.style.height = (900 * s) + 'px';
+      b.parentElement.style.width = (1440 * s) + 'px';
+    }
+  }
+  for (const b of document.querySelectorAll('.board')) {
+    const w = document.createElement('div');
+    w.className = 'wrapscale';
+    b.parentElement.insertBefore(w, b);
+    w.appendChild(b);
+  }
+  const fit = Math.max(30, Math.min(100, Math.round((window.innerWidth - 60) / 1440 * 100)));
+  z.value = fit;
+  apply(fit);
+  z.addEventListener('input', () => apply(+z.value));
+</script>
+</body>
+</html>

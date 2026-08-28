@@ -1,0 +1,32 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Board — editing" },
+    { "file": "Inspector.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900, "title": "Object selected" },
+    { "file": "Story.dc.html", "x": 0, "y": 1060, "w": 1440, "h": 900, "title": "Story mode" },
+    { "file": "Export.dc.html", "x": 1560, "y": 1060, "w": 1440, "h": 900, "title": "Export framing" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 620,
+      "text": "Visualizcy — full app\n\nInfinite pan/zoom board, palette left, inspector right, story timeline below.\nTokens lifted from src/theme.js; card anatomy matches src/render.js at scale 1\n(168x62, r12, 34px badge, 3px meter)."
+    },
+    {
+      "id": "note-inspector",
+      "x": 1560,
+      "y": -110,
+      "w": 420,
+      "text": "The inspector is new — properties are only editable as JSON today.\nWiring segmented control is the existing role: gives / takes / both."
+    },
+    {
+      "id": "note-export",
+      "x": 1560,
+      "y": 970,
+      "w": 420,
+      "text": "Export is not built yet. Shown here because timelines are already\ndeterministic, which is what makes frame-sequence render possible."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}
