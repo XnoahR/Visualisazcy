@@ -19,9 +19,14 @@ export const theme = {
   warn:   '#fcd34d',
   bad:    '#fca5a5',
 
+  // A write is not a read. Purple sits far enough from the blue of a request
+  // and the green of a response to read at packet size, which is 3.4px.
+  write:  '#c084fc',
+
   // wires
   wire:       'rgba(255,255,255,0.14)',
   wireActive: 'rgba(110,160,255,0.34)',
+  wireAsync:  'rgba(192,132,252,0.30)',   // dashed: a hand-off, not a call
 
   fontDisplay: '"Space Grotesk", system-ui, sans-serif',
   fontMono:    '"JetBrains Mono", ui-monospace, monospace',

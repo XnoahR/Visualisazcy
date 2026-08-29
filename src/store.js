@@ -69,6 +69,7 @@ function strip(def) {
   if (def.nodes?.length) out.nodes = def.nodes
   if (def.edges?.length) out.edges = def.edges.map(e => ({ from: e.from, to: e.to }))
   if (def.sections?.length) out.sections = def.sections
+  if (def.groups?.length) out.groups = def.groups
   if (def.steps?.length) out.steps = def.steps
   if (def.lanes?.length) out.lanes = def.lanes
   if (def.slots) out.slots = def.slots

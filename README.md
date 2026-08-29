@@ -411,7 +411,199 @@ them. Adjacent sections have overlapping corners, and letting an invisible grip
 win means resizing something you were not pointing at.
 
 Right-click the strip to remove the grouping; the nodes it held stay exactly
-where they are. ▢ adds one.
+where they are.
+
+**▢ Section** wraps the current selection when there is one, and otherwise finds
+the clear patch nearest the middle of the board. A fixed spawn rectangle landed
+on top of whatever was already there and silently adopted it — and then moving
+the section hauled objects you never grouped.
+
+That is also why **Alt+drag** on the title strip moves the frame *without* its
+contents. Geometric membership is convenient until it is not, and this is the
+way out of it.
+
+## Groups: folding a service into one object
+
+A microservice is not one box. A cart service is an API, a worker, a cache and a
+database, and three of those plus a gateway is twenty-odd cards and a wire
+tangle where the interesting fact — *the gateway talks to three services* — is
+the one thing you cannot see.
+
+Select two or more objects and press **Ctrl+G**. They become a group: a named
+set that folds into one card.
+
+```
+gateway ──> ┌─────────────────┐        double-click to open it
+           ┌┤ ×4  Cart Service│        − on the strip to fold it
+          ┌┤│     16 rps in   │        Ctrl+Shift+G to dissolve it
+          └┴┴─────────────────┘
+```
+
+Groups **nest**: select two folded service cards and press Ctrl+G again and you
+have a region. The same gesture at every level.
+
+### Folding changes no number
+
+The simulation runs on the real graph; everything you see is drawn from a **view
+graph** derived from it. `sim.js` never learns the word "fold". The members of a
+folded group keep queueing, keep dropping and keep being counted — their packets
+still travel and still take their travel time, they are simply not drawn.
+
+So the same scene run folded and unfolded reports the same `processed`, the same
+`dropped`, the same p50 and p99, and the same per-node rps. That is the property
+the whole feature rests on, and `tests/groups.test.mjs` asserts it at three fold
+depths before anything is painted.
+
+The tempting alternative — collapsing a group into one node with a derived
+latency and concurrency — is a lie for anything but a straight chain: a fan-out
+to three servers has three times the capacity of its slowest member, and a cache
+hit rate short-circuits most requests entirely. Same mistake as declaring
+capacity by hand.
+
+### What the card reports
+
+Everything on a folded card is measured from the members that just ran:
+
+- **×N** — how many objects are hidden in here, counted through nesting, so a
+  folded region reports objects and not the services between
+- **rps in** — what arrives at the members that outsiders actually talk to
+- **the meter** — the *worst* member utilisation, `max(rate / capacity)`. Not an
+  invented group capacity: it needs no aggregation theory and answers the
+  question you have, which is how close this service is to falling over
+- **a red border** when any member inside is overloaded
+
+Two cards peek out behind the front one. That is the whole job of the visual: it
+has to say *this opens* before you have read the label.
+
+### Why this is not a section
+
+A section's membership is **geometric** — whatever sits inside the rectangle.
+That is right for a region label and wrong for a service: dragging an unrelated
+cache over the Cart Service rectangle must not make it part of the cart service.
+A service is a named set, not a location.
+
+|  | Section | Group |
+|---|---|---|
+| membership | geometric, recomputed | explicit id list |
+| rectangle | you draw and resize it | derived from its members |
+| nests | no | yes |
+| folds | no | yes |
+
+Both exist. A section says *these things are near each other*; a group says
+*these things are one thing*.
+
+### Rules worth knowing
+
+- **One parent, no cycles**, enforced at creation and in validation. Grouping a
+  selection that spans two different groups is refused with a reason rather than
+  guessed at.
+- **No wiring into a folded card.** A `+` handle there would have to guess which
+  member the wire means. Unfold to rewire.
+- **Dragging a folded card carries every member** by the same delta, which is
+  what keeps the card sitting on its own centroid when you fold it again.
+- **Leaving a group is an action, not a position.** A group's box is derived
+  from its members, so dragging one "outside" only stretches the box — there is
+  no outside. Select it and press **Ctrl+Shift+G**, or use *Take out* in the
+  inspector. The same shortcut dissolves a selected group.
+- **Click an open group's title strip to select it**, which is how you rename
+  one. It drags as well; the strip does both.
+- **Deleting a folded card deletes what it stands for.** Right-clicking its
+  strip only dissolves the boundary and leaves the objects.
+- **Opening a group does not push its neighbours aside.** An open box needs more
+  room than the card it replaced; on a tight board it will crowd the next
+  service. That arithmetic is why folding is worth having.
+
+The full design note, including what was deliberately left out, is in
+[`docs/groups.md`](docs/groups.md).
+
+## Edges say how the call is made
+
+An edge used to be `{ from, to }`. Half of what a diagram communicates is in the
+arrows, and ours could say nothing — a queue write and an HTTP call looked the
+same.
+
+```js
+edge('api', 'bus', { async: true, protocol: 'AMQP', latency: 8 })
+```
+
+**`async`** is the difference between *the gateway called the cart service* and
+*the gateway dropped a job and walked away*. An async hand-off **is** the
+completion: the caller is answered at the hand-off, and the work carries on
+behind it. p50 goes from 2600ms to 2ms, and a separate **Jobs** counter tracks
+what finished after the caller had already left. Async wires are dashed and
+purple, and wiring into a broker or a queue sets it on its own.
+
+**`latency`** is the network hop, and it counts in p50 **both ways** — a 60ms
+wire costs 120ms round trip. Declared network time is a modelled cost; the time a
+dot spends flying across the screen is a rendering choice and still is not
+counted.
+
+Click a wire in Edit mode to set any of it.
+
+## Failure, and what you do about it
+
+**Alt-click an object in Play** to degrade it: six times slower, a third of calls
+failing. Not dead — that is the outage that actually happens, and the one a
+diagram never shows. Degraded is **amber**; overloaded is **red**. They are
+different problems: one is answering badly, the other has stopped accepting.
+
+Objects can also carry policies, and each shows as a small mark on the card so it
+is not invisible until it fires:
+
+| policy | mark | what it does |
+|---|---|---|
+| `failureRate: 0.3` | `30%` | a share of calls this object fumbles |
+| `retry: { max, backoff }` | `↻3` | exponential, with jitter — synchronised retries are their own outage |
+| `breaker: { threshold, window, resetAfter, min }` | `⦸` | closed → open → half-open, one probe deciding |
+
+A breaker's state lives on the **caller**, one per downstream, because the caller
+is the one that has to stop calling. An open wire goes red and dashed with an
+`OPEN` chip.
+
+**Retry without a breaker makes an outage worse**, and the scene *When retries
+make it worse* proves it: with retries on and no breaker, the database takes 82
+requests per second while the client is only sending 60. Validation warns you
+about the combination.
+
+## Reads and writes
+
+A source declares `writeRatio: 0.3`; an object declares `accepts: 'read'` or
+`'write'`. Replicas take reads, primaries take writes, and routing honours it.
+Write packets are drawn purple.
+
+## Lag
+
+Shown on anything holding a real backlog, not only a queue. In a broker pipeline
+the messages pile up at whoever is too slow to read them, and pointing at the
+broker while the worker is the one drowning would be a lie.
+
+## Custom objects
+
+The palette ends with **Custom**: a blank object with unremarkable defaults, so
+an unedited one reads as *not filled in yet*. Drop one and the inspector lets
+you set all of it — name, badge text, the line underneath, colour, role, and its
+own latency and concurrency.
+
+```
+┌──────────────────────────┐    Label      Fraud Scorer
+│ ML   Fraud Scorer        │    Badge      ML
+│      GPU pool, p99 40ms  │    Under it   GPU pool, p99 40ms
+└──────────────────────────┘    Colour     #7dd3fc
+  ▓▓▓▓▓░░░░░░░░░░░░░░░░░░░      Role       takes only
+                                Latency    40 ms
+   30/150 rps                   At once    6
+                                Capacity   150 /s   ← derived, not typed
+```
+
+There is one `custom` **type**, not a type editor: two custom objects are two
+sets of per-instance overrides. Appearance is resolved through `colorOf`,
+`iconOf` and `subtitleOf`, so the palette swatch, the card and a saved scene can
+never disagree about what something looks like. A colour that is not `#rrggbb`
+falls back to the type default rather than reaching the painter and drawing NaN.
+
+Those overrides work on **any** type, not only `custom` — recolour a database,
+rebadge a queue. And **Role** is in the inspector because it is the wiring
+contract: it decides what an object may plug into.
 
 ## Plugging things together
 
@@ -654,20 +846,17 @@ index.html        demo harness
 
 ## Not in here yet
 
-Deliberately left out of v1, in rough order of usefulness:
+- **Partitions and consumer groups.** The broker is a durable buffer with lag,
+  not a partitioned log with per-group offsets.
+- **Bulkheads.** Isolated resource pools per caller. The third resilience
+  pattern, and the only one not modelled.
+- **Timeouts.** A slow call blocks rather than giving up at a deadline — and a
+  timeout is what most retries are really reacting to.
+- **Offline video render.** Export is still real-time MediaRecorder.
+- **Reusable custom types.** Custom objects are per-instance overrides; there is
+  no way to define one and reuse it from the palette.
+- **Illustration assets.** Phones, buildings, maps as inline SVG. The reference
+  work leans on these heavily; they are static art, not another engine.
 
-- **Cache hit ratio.** A `hitRate` on cache nodes so a hit short-circuits back
-  instead of forwarding to the database. This is the one that unlocks a whole
-  category of scenes.
-- **Latency per node.** Packets currently travel at constant speed; per-node
-  service time would let slow databases actually look slow.
-- **Retries, backoff, circuit breaker.** All expressible on top of the trail that
-  packets already carry.
-- **Video export.** Headless render to frames, then a scene spec becomes an MP4
-  without screen recording. Timelines are already deterministic, so this is
-  mostly plumbing.
-- **Illustration assets.** Phones, buildings, maps as inline SVG placed into a
-  scene. The reference work leans on these heavily; they are static art, not
-  another engine.
-- **Read/write packet kinds.** Needed before a primary/replica scene teaches
-  anything beyond fan-out.
+[`docs/architecture.md`](docs/architecture.md) has the full inventory and what
+the research changed.

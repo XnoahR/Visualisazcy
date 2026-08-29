@@ -3,15 +3,20 @@
 // packets are dots at a lerped position. That is the entire visual system.
 
 import { theme, card as C } from './theme.js'
-import { typeOf, roleOf, canGive, declaredOf } from './registry.js'
+import { typeOf, roleOf, canGive, declaredOf, colorOf, iconOf, subtitleOf } from './registry.js'
+import { failureOf, breakerOf, retryOf } from './registry.js'
 import { easeOutBack, easeOutCubic, clamp01, mix, damp } from './ease.js'
 import { inFrame } from './scene.js'
 import { drawAnnotations } from './annotate.js'
+import { viewGraph, childItemsOf, openGroups, groupById } from './groups.js'
 
 // Scene-kind registry. 'graph' is built in; anything else registers into it.
 const SCENE_KINDS = {}
 const HANDLE_R = 7
 const SECTION_HEAD = 24
+const GROUP_W = 1.15     // a folded card is wider than a node, so the two never read alike
+const GROUP_PAD = 17     // room between an open group's edge and its contents
+const STACK = 4.5        // how far the cards behind a folded one peek out
 
 export function registerRenderer(kind, fn) {
   SCENE_KINDS[kind] = fn
@@ -33,6 +38,7 @@ export function createRenderer(canvas) {
   let hoverId = null
   let hoverEdge = null
   let hoverSection = null
+  let hoverGroup = null
   let pending = null
   let guides = []            // alignment lines shown while dragging
   let selection = new Set()  // ids the editor has selected
@@ -127,6 +133,11 @@ export function createRenderer(canvas) {
     },
   }
 
+  // Everything drawn and everything hit-tested comes from here. Rebuilt per
+  // call rather than cached: a cached view goes stale the moment a node is
+  // added, and hit tests run between draws.
+  const view = sim => viewGraph(sim.state, n => sim.appearOf(n))
+
   function resize() {
     const dpr = window.devicePixelRatio || 1
     const r = canvas.getBoundingClientRect()
@@ -150,16 +161,19 @@ export function createRenderer(canvas) {
   // Only a composition shrinks to fit. A free board keeps its cards at full
   // size and lets you zoom — objects that shrink as you add more is the wrong
   // model for a canvas, and it is why nine objects made every icon unreadable.
-  function fit(nodes, compose = false) {
+  function fit(sim, compose = false) {
     if (!compose) return
     const gap = 16
-    const visible = nodes.filter(n => !n.hidden && inFrame(n))
+    // View items, not raw nodes: a folded service is one box to keep clear of,
+    // which is most of why folding fixes a crowded composition at all.
+    const visible = view(sim).items.filter(it => it.appear > 0 && inFrame(it))
     for (let i = 0; i < visible.length; i++) {
       for (let j = i + 1; j < visible.length; j++) {
         const dx = Math.abs(visible[i].x - visible[j].x) * W * (1 - gutter)
         const dy = Math.abs(visible[i].y - visible[j].y) * H
         // The pair is clear if it separates on either axis; take the roomier one.
-        const room = Math.max((dx - gap) / C.w, (dy - gap) / C.h)
+        const wide = visible[i].kind === 'group' || visible[j].kind === 'group'
+        const room = Math.max((dx - gap) / (C.w * (wide ? GROUP_W : 1)), (dy - gap) / C.h)
         if (room < S) S = Math.max(0.42, room)
       }
     }
@@ -175,8 +189,10 @@ export function createRenderer(canvas) {
   // written for and the artboard zooms as one piece.
   // No clamping. Pinning cards inside the frame is what made the pan/zoom
   // canvas a lie: you could travel to empty space but nothing could live there.
+  // Takes a node or a view item; a group item is wider, and nothing else about
+  // the geometry differs.
   function boxOf(n) {
-    const w = C.w * S, h = C.h * S
+    const w = C.w * S * (n.kind === 'group' ? GROUP_W : 1), h = C.h * S
     return { cx: toPx(n.x), cy: n.y * H, w, h, hw: w / 2, hh: h / 2 }
   }
 
@@ -214,12 +230,12 @@ export function createRenderer(canvas) {
 
   // Which nodes a marquee has caught. Rectangle overlap, not containment —
   // dragging a band across a row should take the whole row.
-  function nodesInMarquee(nodes) {
+  function nodesInMarquee(sim) {
     if (!marquee) return []
     const x = Math.min(marquee.x0, marquee.x1), X = Math.max(marquee.x0, marquee.x1)
     const y = Math.min(marquee.y0, marquee.y1), Y = Math.max(marquee.y0, marquee.y1)
-    return nodes.filter(n => {
-      if (n.hidden) return false
+    return view(sim).items.filter(n => {
+      if (n.appear <= 0) return false
       const b = boxOf(n)
       return b.cx + b.hw >= x && b.cx - b.hw <= X &&
              b.cy + b.hh >= y && b.cy - b.hh <= Y
@@ -232,14 +248,14 @@ export function createRenderer(canvas) {
   const GRID = 26
   const SNAP = 7
 
-  function snapNode(node, nodes) {
+  function snapNode(node, others) {
     const gx = GRID * S, gy = GRID * S
     let fx = toPx(node.x), fy = node.y * H
     const found = []
 
     let bestX = null, bestY = null
-    for (const o of nodes) {
-      if (o === node || o.hidden) continue
+    for (const o of others) {
+      if (o.id === node.id || o.appear <= 0 || o.hidden) continue
       const ox = toPx(o.x), oy = o.y * H
       if (Math.abs(ox - fx) < SNAP && (bestX === null || Math.abs(ox - fx) < Math.abs(bestX - fx))) bestX = ox
       if (Math.abs(oy - fy) < SNAP && (bestY === null || Math.abs(oy - fy) < Math.abs(bestY - fy))) bestY = oy
@@ -278,21 +294,277 @@ export function createRenderer(canvas) {
   // vocabulary costs one function, not a second engine.
   function drawGraph(surf, sim) {
     const st = sim.state
+    // Everything below draws the VIEW graph. A folded group is one item here and
+    // its members are simply absent, which is why no painter needs to know that
+    // folding exists.
+    const vg = view(sim)
     for (const sec of st.sections || []) paintSection(sim, sec)
-    const boxes = new Map(st.nodes.map(n => [n.id, boxOf(n)]))
-    for (const e of st.edges) paintWire(sim, boxes, e)
-    for (const p of st.packets) paintPacket(sim, boxes, p)
-    for (const n of st.nodes) {
-      if (sim.appearOf(n) <= 0) continue
-      paintCard(sim, n, boxes.get(n.id))
+
+    const boxes = new Map(vg.items.map(it => [it.id, boxOf(it)]))
+    const rects = groupRects(sim, vg, boxes)
+    for (const g of vg.open) paintGroupBox(sim, vg, g, rects)
+
+    for (const e of vg.edges) paintWire(sim, boxes, e)
+    for (const p of st.packets) paintPacket(sim, boxes, vg, p)
+    for (const it of vg.items) {
+      if (it.appear <= 0) continue
+      if (it.kind === 'group') paintGroupCard(sim, it, boxes.get(it.id))
+      else paintCard(sim, it.node, boxes.get(it.id))
     }
     // Handles last, so they sit above neighbouring cards.
-    for (const n of st.nodes) {
-      if (n.id !== hoverId || n.hidden) continue
-      if (!canGive(n) || sim.appearOf(n) < 1) continue
-      paintHandles(boxes.get(n.id))
+    for (const it of vg.items) {
+      if (it.id !== hoverId || it.kind !== 'node' || it.node.hidden) continue
+      if (!canGive(it.node) || it.appear < 1) continue
+      paintHandles(boxes.get(it.id))
     }
     return boxes
+  }
+
+  // --- groups ---------------------------------------------------------------
+
+  // An open group's rectangle is the union of what it holds, padded — computed
+  // innermost first, so a parent encloses its children's BOXES rather than
+  // reaching past them to their contents. A folded child contributes its card.
+  function groupRects(sim, vg, boxes) {
+    const out = new Map()
+    const walk = (g, seen = new Set()) => {
+      if (out.has(g.id)) return out.get(g.id)
+      if (seen.has(g.id)) return null
+      seen.add(g.id)
+      let r = null
+      for (const it of childItemsOf(sim.state, g, vg.idx)) {
+        let b = null
+        const item = vg.byId.get(it.id)
+        if (item) {
+          if (item.appear <= 0.01) continue
+          const bx = boxes.get(it.id) || boxOf(item)
+          b = { x0: bx.cx - bx.hw, y0: bx.cy - bx.hh, x1: bx.cx + bx.hw, y1: bx.cy + bx.hh }
+        } else if (it.kind === 'group') {
+          const inner = walk(it.group, seen)
+          if (inner) b = { x0: inner.x, y0: inner.y, x1: inner.x + inner.w, y1: inner.y + inner.h }
+        }
+        if (!b) continue
+        r = r ? { x0: Math.min(r.x0, b.x0), y0: Math.min(r.y0, b.y0),
+                  x1: Math.max(r.x1, b.x1), y1: Math.max(r.y1, b.y1) } : b
+      }
+      if (!r) { out.set(g.id, null); return null }
+      const pad = GROUP_PAD * S
+      const head = headHeight()
+      const rect = { x: r.x0 - pad, y: r.y0 - pad - head,
+                     w: (r.x1 - r.x0) + pad * 2, h: (r.y1 - r.y0) + pad * 2 + head }
+      out.set(g.id, rect)
+      return rect
+    }
+    for (const g of vg.open) walk(g)
+    return out
+  }
+
+  const CHEV = 17
+  function chevronRect(r) {
+    const k = CHEV * S
+    return { x: r.x + r.w - k - 9 * S, y: r.y + (headHeight() - k) / 2, w: k, h: k }
+  }
+
+  // Solid edge, unlike a section's dashed one: a section is a region label, a
+  // group is a boundary with a membership list, and they must not read alike.
+  // Outermost paints first so nested boxes stack correctly.
+  function paintGroupBox(sim, vg, g, rects) {
+    const r = rects.get(g.id)
+    if (r) {
+      const tone = g.tone ? (theme[g.tone] || theme.accent) : theme.accent
+      const armed = hoverGroup === g.id
+      ctx.save()
+      ctx.fillStyle = withAlpha(tone, 0.035)
+      roundRect(r.x, r.y, r.w, r.h, 16 * S)
+      ctx.fill()
+      ctx.strokeStyle = withAlpha(tone, armed ? 0.72 : 0.34)
+      ctx.lineWidth = 1.2 * S
+      roundRect(r.x, r.y, r.w, r.h, 16 * S)
+      ctx.stroke()
+
+      const sh = headHeight()
+      ctx.fillStyle = withAlpha(tone, armed ? 0.16 : 0.09)
+      roundRect(r.x, r.y, Math.min(r.w, ctxTextWidth(g.label) + 30 * S), sh, 10 * S)
+      ctx.fill()
+
+      letterSpace(1.8 * S)
+      ctx.fillStyle = tone
+      ctx.font = `600 ${Math.max(9, 9.5 * S)}px ${theme.fontMono}`
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(g.label).toUpperCase(), r.x + 12 * S, r.y + sh / 2 + 0.5)
+      letterSpace(0)
+
+      // The fold control. Drawn always, not only on hover: it is the only way
+      // back to the folded view, and a hidden affordance is one you never find.
+      const c = chevronRect(r)
+      ctx.fillStyle = armed ? withAlpha(tone, 0.2) : 'rgba(255,255,255,0.04)'
+      roundRect(c.x, c.y, c.w, c.h, 5 * S)
+      ctx.fill()
+      ctx.strokeStyle = withAlpha(tone, armed ? 0.8 : 0.4)
+      ctx.lineWidth = 1.3 * S
+      const m = c.w * 0.28
+      ctx.beginPath()
+      ctx.moveTo(c.x + m, c.y + c.h / 2)
+      ctx.lineTo(c.x + c.w - m, c.y + c.h / 2)
+      ctx.stroke()
+      ctx.restore()
+    }
+    for (const it of childItemsOf(sim.state, g, vg.idx)) {
+      if (it.kind === 'group' && !it.group.folded) paintGroupBox(sim, vg, it.group, rects)
+    }
+  }
+
+  // A folded group must not read as a node, because it opens. Two rectangles
+  // peeking out behind it say "there is more in here" before the label has been
+  // read, which is the one job this card has.
+  function paintGroupCard(sim, it, box) {
+    if (!box) return
+    const { cx, cy, w, h, hw, hh } = box
+    const x = cx - hw, y = cy - hh
+    const tone = it.group.tone ? (theme[it.group.tone] || theme.accent) : theme.accent
+
+    const enter = it.appear
+    const scale = mix(0.88, 1, easeOutBack(enter)) * (1 + 0.02 * it.pulse)
+    const lift = mix(10 * S, 0, easeOutCubic(enter))
+
+    ctx.save()
+    ctx.globalAlpha = (it.dead ? 0.35 : 1) * easeOutCubic(enter) * mix(1, 0.2, it.dim)
+      * (inFrame(it) ? 1 : 0.4)
+    ctx.translate(cx, cy + lift)
+    ctx.scale(scale, scale)
+    ctx.translate(-cx, -cy)
+
+    // The cards behind. Full opacity and a tinted hairline, because the first
+    // attempt faded them to a fifth and outlined them in the 5.5% card edge —
+    // both slivers disappeared into the background and a folded group ended up
+    // looking exactly like the node it is not.
+    for (let i = 2; i >= 1; i--) {
+      const k = i * STACK * S
+      ctx.fillStyle = theme.card
+      roundRect(x + k * 1.7, y - k, w - k * 3.4, h, C.r * S)
+      ctx.fill()
+      ctx.strokeStyle = withAlpha(tone, 0.42 - i * 0.1)
+      ctx.lineWidth = 1 * S
+      roundRect(x + k * 1.7, y - k, w - k * 3.4, h, C.r * S)
+      ctx.stroke()
+    }
+
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'
+    ctx.shadowBlur = 11 * S
+    ctx.shadowOffsetY = 4 * S
+    ctx.fillStyle = theme.card
+    roundRect(x, y, w, h, C.r * S)
+    ctx.fill()
+    ctx.restore()
+
+    ctx.strokeStyle = it.pulse > 0 ? theme.cardEdgeHi : theme.cardEdge
+    ctx.lineWidth = 1 * S
+    roundRect(x, y, w, h, C.r * S)
+    ctx.stroke()
+
+    if (it.hot > 0.01) {
+      ctx.save()
+      ctx.globalAlpha *= it.hot
+      ctx.shadowColor = theme.bad
+      ctx.shadowBlur = 14 * S
+      ctx.strokeStyle = theme.bad
+      ctx.lineWidth = 1.6 * S
+      roundRect(x, y, w, h, C.r * S)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // The badge counts what is hidden, which is the question a folded card is
+    // asked most. It counts LEAVES, so a folded region reports objects and not
+    // the services between.
+    const bs = C.badge * S
+    const bx = x + C.pad * S
+    const by = cy - bs / 2
+    ctx.fillStyle = withAlpha(tone, 0.16)
+    roundRect(bx, by, bs, bs, C.badgeR * S)
+    ctx.fill()
+    ctx.strokeStyle = withAlpha(tone, 0.38)
+    ctx.lineWidth = 1 * S
+    roundRect(bx, by, bs, bs, C.badgeR * S)
+    ctx.stroke()
+
+    ctx.fillStyle = tone
+    ctx.font = `600 ${9.5 * S}px ${theme.fontMono}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(`×${it.count}`, bx + bs / 2, by + bs / 2 + 0.5 * S)
+
+    const tx = bx + bs + 10 * S
+    const tw = x + w - C.pad * S - tx
+    ctx.textAlign = 'left'
+    ctx.fillStyle = theme.text
+    ctx.font = `600 ${12.5 * S}px ${theme.fontDisplay}`
+    ctx.fillText(truncate(it.label, tw), tx, cy - 7 * S)
+
+    ctx.font = `500 ${9.5 * S}px ${theme.fontMono}`
+    if (sim.state.running) {
+      ctx.fillStyle = it.hot > 0.5 ? theme.bad : theme.textDim
+      ctx.fillText(`${Math.round(it.showRate)} rps in`, tx, cy + 8 * S)
+    } else {
+      ctx.fillStyle = theme.textMute
+      ctx.fillText(`${it.count} object${it.count === 1 ? '' : 's'}`, tx, cy + 8 * S)
+    }
+
+    // Worst member utilisation. Not an invented group capacity: a fan-out has
+    // more throughput than its slowest member and a cache short-circuits most
+    // requests, so any single derived number here would be a lie.
+    if (sim.state.running || it.worst > 0.001) {
+      const frac = clamp(it.worst, 0, 1)
+      const mw = w - C.pad * 2 * S
+      const mx = x + C.pad * S
+      const my = y + h - C.meterH * S - 5 * S
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'
+      roundRect(mx, my, mw, C.meterH * S, C.meterH * S / 2)
+      ctx.fill()
+      ctx.fillStyle = frac > 0.95 ? theme.bad : frac > 0.7 ? theme.warn : theme.good
+      roundRect(mx, my, Math.max(2 * S, mw * frac), C.meterH * S, C.meterH * S / 2)
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  function groupGeom(sim) {
+    const vg = view(sim)
+    const boxes = new Map(vg.items.map(it => [it.id, boxOf(it)]))
+    return groupRects(sim, vg, boxes)
+  }
+
+  // Innermost first: a nested group's strip sits on top of its parent's box, so
+  // the smaller rectangle has to win.
+  function openByArea(sim) {
+    return [...groupGeom(sim).entries()]
+      .filter(([, r]) => r)
+      .sort((a, b) => a[1].w * a[1].h - b[1].w * b[1].h)
+  }
+
+  function groupHeadAt(sim, sx, sy) {
+    const p = toFrame(sx, sy)
+    for (const [id, r] of openByArea(sim)) {
+      const g = groupById(sim.state, id)
+      if (!g) continue
+      const sh = headHeight()
+      const hw = Math.min(r.w, ctxTextWidth(g.label) + 30 * S)
+      if (p.x >= r.x && p.x <= r.x + hw && p.y >= r.y && p.y <= r.y + sh) return g
+    }
+    return null
+  }
+
+  function groupChevronAt(sim, sx, sy) {
+    const p = toFrame(sx, sy)
+    for (const [id, r] of openByArea(sim)) {
+      const c = chevronRect(r)
+      const s2 = 4 * S
+      if (p.x >= c.x - s2 && p.x <= c.x + c.w + s2 &&
+          p.y >= c.y - s2 && p.y <= c.y + c.h + s2) return groupById(sim.state, id)
+    }
+    return null
   }
 
   // Sections sit behind everything: a tinted rectangle and a title strip. The
@@ -463,9 +735,10 @@ export function createRenderer(canvas) {
   // space, so zoom does not change how easy a wire is to grab.
   function edgeHitTest(sim, sx, sy) {
     const p = toFrame(sx, sy)
-    const boxes = new Map(sim.state.nodes.map(n => [n.id, boxOf(n)]))
+    const vg = view(sim)
+    const boxes = new Map(vg.items.map(it => [it.id, boxOf(it)]))
     let best = null, bestD = 10 * S
-    for (const e of sim.state.edges) {
+    for (const e of vg.edges) {
       if (e.off) continue
       const a = boxes.get(e.from), b = boxes.get(e.to)
       if (!a || !b) continue
@@ -491,7 +764,7 @@ export function createRenderer(canvas) {
   // for a + is the gesture that dismisses it — the control is unusable.
   function hoverTargetAt(sim, sx, sy) {
     const direct = hitTest(sim, sx, sy)
-    if (direct) return direct
+    if (direct) return direct.kind === 'group' ? null : direct
     if (!hoverId) return null
     const n = sim.byId(hoverId)
     if (!n || n.hidden || !canGive(n)) return null
@@ -611,7 +884,7 @@ export function createRenderer(canvas) {
     const ew = 26 * S
     const ex = x + w - 11 * S - ew
     const cy = y + h / 2
-    const col = def.color
+    const col = colorOf(n)
     ctx.save()
 
     if (def.effect === 'slots') {
@@ -787,18 +1060,19 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Takes a VIEW edge: its endpoints may be nodes or folded cards, and it may
+  // stand for several real edges that collapsed onto the same pair.
   function paintWire(sim, boxes, e) {
     const st = sim.state
     if (e.off) return
     const a = boxes.get(e.from), b = boxes.get(e.to)
     if (!a || !b) return
-    const na = sim.byId(e.from)
-    const nb = sim.byId(e.to)
+    const na = e.a, nb = e.b
     const dead = na?.dead || nb?.dead
 
     // A wire draws itself only as far as its two endpoints have arrived, so the
     // topology assembles in flow order instead of snapping into place.
-    const reveal = easeOutCubic(Math.min(sim.appearOf(na), sim.appearOf(nb)))
+    const reveal = easeOutCubic(Math.min(na.appear, nb.appear))
     if (reveal <= 0.01) return
 
     const p1 = edgePoint(a, b.cx, b.cy)
@@ -808,17 +1082,27 @@ export function createRenderer(canvas) {
     // A wire under the cursor with nothing else over it goes red, so what a
     // right-click would remove is visible before the click.
     const armed = hoverEdge && hoverEdge.from === e.from && hoverEdge.to === e.to
+    // An open breaker is the loudest thing a wire can say, so it outranks
+    // everything else the wire might be trying to show.
+    const trip = breakerOn(sim, e)
 
     ctx.save()
     const faded = Math.max(na?.dim || 0, nb?.dim || 0)
     ctx.globalAlpha = (dead ? 0.22 : reveal) * mix(1, 0.18, faded)
-    ctx.strokeStyle = armed ? theme.bad : st.running ? theme.wireActive : theme.wire
-    ctx.lineWidth = (armed ? 2.4 : 1.5) * S
+    ctx.strokeStyle = trip === 'open' ? theme.bad
+      : armed ? theme.bad
+      : e.async ? theme.wireAsync
+      : st.running ? theme.wireActive : theme.wire
+    ctx.lineWidth = (armed || trip === 'open' ? 2.4 : 1.5) * S
     ctx.lineCap = 'round'
+    // Dashed means nobody is waiting: a hand-off, or a call that is not being
+    // made at all right now.
+    if (e.async || trip !== 'closed') ctx.setLineDash([7 * S, 5 * S])
     ctx.beginPath()
     ctx.moveTo(p1.x, p1.y)
     ctx.lineTo(p2.x, p2.y)
     ctx.stroke()
+    ctx.setLineDash([])
 
     if (reveal < 0.995) { ctx.restore(); return }
 
@@ -834,11 +1118,71 @@ export function createRenderer(canvas) {
     ctx.lineTo(mx, my)
     ctx.lineTo(mx - Math.cos(ang + 0.5) * k, my - Math.sin(ang + 0.5) * k)
     ctx.stroke()
+    ctx.globalAlpha /= 0.55
+
+    // What the wire is called, and what it is doing. Shown on hover, or always
+    // when the author asked for it — a chip on every edge is noise on any board
+    // big enough to need groups.
+    // Short, because the gap between two cards is often only ~35px wide and a
+    // chip that does not fit sits on top of the card next to it.
+    const tag = trip === 'open' ? 'OPEN'
+      : trip === 'half' ? 'PROBE'
+      : armed ? [e.protocol, e.async ? 'async' : null].filter(Boolean).join(' · ')
+      : e.label ? e.label
+      : null
+    if (tag) {
+      // Offset perpendicular to the wire, so even a chip wider than the gap
+      // clears the cards at both ends instead of landing on one.
+      const nx = -Math.sin(ang), ny = Math.cos(ang)
+      const off = 13 * S
+      wireChip(tag, (p1.x + p2.x) / 2 + nx * off, (p1.y + p2.y) / 2 + ny * off,
+               trip !== 'closed' ? theme.bad : e.async ? theme.write : theme.textMute)
+    }
     ctx.restore()
   }
 
-  function paintPacket(sim, boxes, p) {
-    const a = boxes.get(p.from), b = boxes.get(p.to)
+  function wireChip(text, x, y, colour) {
+    ctx.save()
+    letterSpace(0.8 * S)
+    ctx.font = `600 ${Math.max(7.5, 8 * S)}px ${theme.fontMono}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const w = ctx.measureText(text).width + 10 * S
+    const h = 13 * S
+    ctx.fillStyle = theme.bg
+    ctx.globalAlpha *= 0.92
+    roundRect(x - w / 2, y - h / 2, w, h, 4 * S)
+    ctx.fill()
+    ctx.strokeStyle = withAlpha(colour === theme.textMute ? '#8087a0' : colour, 0.35)
+    ctx.lineWidth = 1 * S
+    roundRect(x - w / 2, y - h / 2, w, h, 4 * S)
+    ctx.stroke()
+    ctx.fillStyle = colour
+    ctx.fillText(text, x, y + 0.5 * S)
+    letterSpace(0)
+    ctx.restore()
+  }
+
+  // Worst breaker among the real calls this wire stands for. A folded group can
+  // hide several, and one open breaker is the fact worth surfacing.
+  function breakerOn(sim, e) {
+    if (!sim.breakerState || !e.real) return 'closed'
+    let worst = 'closed'
+    for (const r of e.real) {
+      const st = sim.breakerState(r.from, r.to)
+      if (st === 'open') return 'open'
+      if (st === 'half') worst = 'half'
+    }
+    return worst
+  }
+
+  function paintPacket(sim, boxes, vg, p) {
+    // A hop between two members of the same folded group has both ends on one
+    // card and nowhere to travel. It still runs and still counts — it is simply
+    // not drawn, which is the whole of what folding does.
+    const from = vg.map(p.from), to = vg.map(p.to)
+    if (from === to) return
+    const a = boxes.get(from), b = boxes.get(to)
     if (!a || !b) return
     const p1 = edgePoint(a, b.cx, b.cy)
     const p2 = edgePoint(b, a.cx, a.cy)
@@ -849,7 +1193,11 @@ export function createRenderer(canvas) {
     const y = p1.y + (p2.y - p1.y) * p.progress
     const edge = clamp01(Math.min(p.progress, 1 - p.progress) / 0.11)
     const grow = mix(0.5, 1, easeOutCubic(edge))
-    const color = p.dir === 1 ? theme.accent : p.hit ? theme.warn : theme.good
+    // Four things a dot can be, and they must be told apart at 3.4px: a failure
+    // going home, a write on its way out, a read on its way out, an answer.
+    const color = p.failed ? theme.bad
+      : p.dir === 1 ? (p.kind === 'write' ? theme.write : theme.accent)
+      : p.hit ? theme.warn : theme.good
 
     ctx.save()
     ctx.globalAlpha = mix(0.35, 1, easeOutCubic(edge))
@@ -910,23 +1258,38 @@ export function createRenderer(canvas) {
       ctx.restore()
     }
 
+    // Degraded is amber and overloaded is red, and they are different problems:
+    // one is answering badly, the other has stopped accepting. A single colour
+    // for both is how a diagram stops being useful exactly when it matters.
+    if (n.degraded) {
+      ctx.save()
+      ctx.shadowColor = theme.warn
+      ctx.shadowBlur = 12 * S
+      ctx.strokeStyle = theme.warn
+      ctx.lineWidth = 1.6 * S
+      roundRect(x, y, w, h, C.r * S)
+      ctx.stroke()
+      ctx.restore()
+    }
+
     // badge
     const bs = C.badge * S
     const bx = x + C.pad * S
     const by = cy - bs / 2
-    ctx.fillStyle = withAlpha(def.color, 0.16)
+    const col = colorOf(n)
+    ctx.fillStyle = withAlpha(col, 0.16)
     roundRect(bx, by, bs, bs, C.badgeR * S)
     ctx.fill()
-    ctx.strokeStyle = withAlpha(def.color, 0.38)
+    ctx.strokeStyle = withAlpha(col, 0.38)
     ctx.lineWidth = 1 * S
     roundRect(bx, by, bs, bs, C.badgeR * S)
     ctx.stroke()
 
-    ctx.fillStyle = def.color
+    ctx.fillStyle = col
     ctx.font = `600 ${8.5 * S}px ${theme.fontMono}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(def.icon, bx + bs / 2, by + bs / 2 + 0.5 * S)
+    ctx.fillText(iconOf(n), bx + bs / 2, by + bs / 2 + 0.5 * S)
 
     // text block
     const tx = bx + bs + 10 * S
@@ -935,16 +1298,30 @@ export function createRenderer(canvas) {
     ctx.textAlign = 'left'
     ctx.fillStyle = theme.text
     ctx.font = `600 ${12.5 * S}px ${theme.fontDisplay}`
-    // Below a certain card size the full name cannot fit, and an ellipsis says
-    // less than a shorter real word does.
-    const label = (S < 0.82 && !n.spec.label && def.short) ? def.short : n.label
+    // A shorter real word says more than an ellipsis, so the short name is used
+    // whenever the full one does not fit. This used to key off a scale
+    // threshold, which guessed: at S=1.02 "Message Broker" still did not fit a
+    // card with an effect gauge on it, and rendered as "Message…".
+    let label = n.label
+    if (!n.spec.label && def.short && ctx.measureText(label).width > tw) label = def.short
     ctx.fillText(truncate(label, tw), tx, cy - 7 * S)
 
     if (sim.state.running && roleOf(n) !== 'source') {
-      ctx.fillStyle = n.hot > 0.5 ? theme.bad : theme.textDim
+      ctx.fillStyle = n.degraded ? theme.warn : n.hot > 0.5 ? theme.bad : theme.textDim
       ctx.font = `500 ${9.5 * S}px ${theme.fontMono}`
+      // Consumer lag is the number people actually put on these diagrams, and
+      // it is already sitting in the queue — it just was never shown. Shown on
+      // ANY node holding a real backlog, not only a queue: in a broker pipeline
+      // the messages pile up at whoever is too slow to read them, and pointing
+      // at the broker while the worker is the one drowning would be a lie.
+      const lag = sim.lagOf ? sim.lagOf(n) : 0
       const cap = Number.isFinite(n.capacity) ? `/${n.capacity}` : ''
-      ctx.fillText(`${Math.round(rate)}${cap} rps`, tx, cy + 8 * S)
+      // Truncation cuts the end, so the word that matters goes first: on a
+      // narrow card `12 rps · slow` became `12 rps · sl…` and said nothing.
+      const line = n.degraded ? `slow · ${Math.round(rate)} rps`
+        : lag >= 5 ? `lag ${lag} · ${Math.round(rate)} rps`
+        : `${Math.round(rate)}${cap} rps`
+      ctx.fillText(truncate(line, tw), tx, cy + 8 * S)
     } else {
       // Declared facts take the subtitle's place when present, in mono rather
       // than the display face, so they never read as a measurement.
@@ -955,7 +1332,7 @@ export function createRenderer(canvas) {
         ctx.fillText(truncate(declared.join(' · '), tw), tx, cy + 8 * S)
       } else {
         ctx.font = `500 ${9.5 * S}px ${theme.fontDisplay}`
-        ctx.fillText(truncate(def.subtitle, tw), tx, cy + 8 * S)
+        ctx.fillText(truncate(subtitleOf(n), tw), tx, cy + 8 * S)
       }
     }
 
@@ -975,6 +1352,7 @@ export function createRenderer(canvas) {
     }
 
     if (hasEffect) paintEffect(def, n, x, y, w, h)
+    paintPolicy(n, x, y, w, h)
 
     // Drawn inside the card transform so it rides the entrance with everything
     // else rather than floating at the untransformed position.
@@ -991,11 +1369,44 @@ export function createRenderer(canvas) {
     ctx.restore()
   }
 
+  // Returns a VIEW ITEM, not a node: on a folded board the thing under the
+  // cursor may be a group card. Callers read `.kind` to tell them apart.
+  // Reversed, so a card drawn on top of another wins the click.
+  // Small marks in the card's top-right for the policies that change behaviour
+  // without changing the shape of the diagram: a retry budget, a breaker, an
+  // injected failure rate. Without these they are invisible until they fire.
+  function paintPolicy(n, x, y, w, h) {
+    const marks = []
+    const r = retryOf(n)
+    if (r) marks.push({ t: `↻${r.max}`, c: theme.accent })
+    if (breakerOf(n)) marks.push({ t: '⦸', c: theme.warn })
+    const f = failureOf(n)
+    if (f > 0) marks.push({ t: `${Math.round(f * 100)}%`, c: theme.bad })
+    if (!marks.length) return
+
+    ctx.save()
+    ctx.font = `600 ${Math.max(7, 7.5 * S)}px ${theme.fontMono}`
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'top'
+    let px = x + w - 7 * S
+    for (const m of marks) {
+      const tw2 = ctx.measureText(m.t).width
+      ctx.globalAlpha = 0.85
+      ctx.fillStyle = m.c
+      ctx.fillText(m.t, px, y + 5 * S)
+      px -= tw2 + 5 * S
+    }
+    ctx.restore()
+  }
+
   function hitTest(sim, sx, py0) {
     const { x: px, y: py } = toFrame(sx, py0)
-    for (const n of sim.state.nodes) {
-      const b = boxOf(n)
-      if (Math.abs(px - b.cx) <= b.hw && Math.abs(py - b.cy) <= b.hh) return n
+    const items = view(sim).items
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i]
+      if (it.appear <= 0) continue
+      const b = boxOf(it)
+      if (Math.abs(px - b.cx) <= b.hw && Math.abs(py - b.cy) <= b.hh) return it
     }
     return null
   }
@@ -1035,6 +1446,9 @@ export function createRenderer(canvas) {
   return {
     draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
     snapNode, clearGuides, nodesInMarquee, sectionGripAt,
+    groupHeadAt, groupChevronAt,
+    setHoverGroup: id => { hoverGroup = id },
+    view,
     setShowFrame: v => { showFrame = v },
     get showFrame() { return showFrame },
     setSelection: set => { selection = set },

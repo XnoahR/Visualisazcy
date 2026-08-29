@@ -131,6 +131,100 @@ you grabbed was never painted.
 Whenever an affordance is drawn conditionally, gate its hit test on the same
 condition.
 
+## Depth cues need opacity, not subtlety
+
+A folded group draws two cards peeking out behind it. The first version faded
+them to a fifth and outlined them in the 5.5% card edge — on `#08090d` both
+slivers vanished completely, and a folded group looked exactly like the node it
+is not. They are now full opacity with a tone-tinted hairline.
+
+On a dark palette, "behind" cannot be expressed by lowering alpha. It has to be
+a visible edge.
+
+## Scene coordinates are card widths, not points
+
+A card is 168px wide and a folded group 193px. On a 902px frame that is ~0.19 of
+the width, so two objects closer than 0.19 apart **overlap** — and `fit()` will
+not save you, because it only shrinks a composition, never a free board.
+
+The first pass of the microservices scene put the client, CDN and gateway at
+0.05 / 0.14 / 0.27 and all three collided. Space from the box, then check.
+
+## Anything positional needs a portrait variant
+
+Nodes carry `portrait: [x, y]`. Groups shipped without one and 9:16 broke on the
+first look: the loose nodes moved to their portrait coordinates while every
+folded card stayed at its landscape x, and they collided.
+
+Both layouts live on the one group object, resolved through `posOf(g, portrait)`,
+and writes go back into whichever layout is on screen. Keeping them on a single
+object is deliberate — a runtime/spec split is what you then have to keep in
+step.
+
+## A drag-only affordance is unreachable
+
+Clicking an open group's title strip started a drag and nothing else, so the
+group could never enter the selection — and the inspector is bound to the
+selection, which meant there was no way to rename one. The strip now selects
+*and* drags.
+
+Any element whose only gesture is a drag cannot be inspected. If it has
+properties, its gesture has to select as well.
+
+## A derived box has no outside
+
+A group's rectangle is the union of its members, so dragging one "out" only
+stretches the box. There is no position that means *not in this group*, and
+waiting for the user to find one is waiting forever.
+
+When a container's geometry is derived from its contents, leaving has to be an
+explicit action — a button and a shortcut — not a place you drag to.
+
+## Spawn where the user is, and not on top of anything
+
+`▢ Section` used a fixed rectangle at 0.3/0.28/0.4/0.44. On any populated board
+that lands on existing objects, and because section membership is geometric it
+adopts them silently — the next drag then hauls things nobody grouped.
+
+It now wraps the selection when there is one, and otherwise takes the clear
+patch **nearest the centre**. Scanning from a corner is predictable but puts the
+result where nobody is looking.
+
+## An allow-list of options is a silent trap
+
+`node()` in scene.js copied five named fields and dropped everything else, so a
+scene asking for `latency`, `concurrency`, `retry` or `breaker` got the type
+default and was never told. Thirteen options across the built-in scenes were
+being discarded, and a whole demo scene was configured with a circuit breaker
+that did not exist.
+
+A helper that constructs data should spread what it is given. If a field needs
+checking, that is validate.js's job, where a wrong one produces a message.
+
+## Put the word that matters first
+
+Card text truncates from the end. `12 rps · slow` on a narrow card rendered as
+`12 rps · sl…` and said nothing, so it is now `slow · 12 rps`.
+
+For the same reason the short name is chosen by **measuring**, not by guessing at
+a scale threshold: at S=1.02 "Message Broker" still did not fit a card with an
+effect gauge and rendered as "Message…", because the old rule only swapped in the
+short name below S=0.82.
+
+## A chip on a wire needs a gap to sit in
+
+Two cards 0.23 apart on a 902px frame leave about 35px of visible wire. A
+`BREAKER OPEN` chip is 70px and lands on the card next to it. Labels on wires are
+short (`OPEN`, `PROBE`, `async`) and offset perpendicular to the line, so even an
+oversized one clears both ends.
+
+## Space scenes by the card, not the point
+
+A card is 168px wide, and a folded group 193px — about 0.19 of a 902px frame. Two
+objects closer than that **overlap**, and `fit()` will not save you because it
+only shrinks a composition, never a free board. Seven columns do not fit; the
+sandbox had been overlapping in two places for exactly this reason.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second

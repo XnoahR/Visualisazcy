@@ -24,6 +24,15 @@ export function createTimeline(sim, def) {
     const s = steps[i]
     const show = s.show ? new Set(s.show) : null
     const dead = new Set(s.dead || [])
+    const degraded = new Set(s.degraded || [])
+
+    // A step that names any open group owns the fold state of all of them, the
+    // same contract `show` and `traffic` already keep. This is what lets one
+    // ten-second take go from four service cards to the inside of one of them.
+    if (s.expand) {
+      const open = new Set(s.expand)
+      for (const g of sim.state.groups || []) sim.setFolded(g.id, !open.has(g.id))
+    }
 
     for (const n of sim.state.nodes) {
       if (show) sim.reveal(n.id, show.has(n.id))
@@ -33,6 +42,7 @@ export function createTimeline(sim, def) {
         n.rxLog = []
         n.overloaded = false
       }
+      n.degraded = degraded.has(n.id)
 
       // A step that names any traffic owns all of it: nodes it does not mention
       // fall silent. Otherwise a source switched on in step 2 would still be

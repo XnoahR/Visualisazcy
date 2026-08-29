@@ -9,8 +9,11 @@
 // the meters actually display) is damped separately in advanceAnim, so easing
 // never distorts the numbers it is smoothing.
 
-import { typeOf, roleOf, connectionError, NODE_TYPES, capacityOf } from './registry.js'
-import { placement } from './scene.js'
+import { typeOf, roleOf, connectionError, NODE_TYPES, capacityOf,
+         failureOf, retryOf, breakerOf, acceptsOf,
+         DEGRADE_LATENCY, DEGRADE_FAILURE } from './registry.js'
+import { placement, WORLD_MIN, WORLD_MAX } from './scene.js'
+import { groupById, parentOf, leavesOf, subgroupsOf, childItemsOf, posOf as groupPos } from './groups.js'
 import { damp, clamp01 } from './ease.js'
 
 const WINDOW = 1000        // ms; equal to 1s so rxLog.length reads as rps
@@ -27,12 +30,14 @@ export function createSim(sceneDef, opts = {}) {
     nodes: [],
     edges: [],
     sections: [],
+    groups: [],
     packets: [],
     running: false,
     time: 0,        // simulation clock; only advances while running
     animTime: 0,    // presentation clock; always advances
     portrait: !!opts.portrait,
-    stats: { processed: 0, dropped: 0, overloaded: 0, hits: 0 },
+    stats: { processed: 0, dropped: 0, overloaded: 0, hits: 0,
+             errors: 0, failed: 0, retries: 0, jobs: 0, tripped: 0 },
     latencies: [],
   }
 
@@ -54,6 +59,7 @@ export function createSim(sceneDef, opts = {}) {
         rxLog: [],
         overloaded: false,
         dead: false,
+        degraded: false,   // answering, slowly and badly — the failure that actually happens
         hidden: false,
         spawnAccum: 0,
         rrIdx: 0,
@@ -70,6 +76,9 @@ export function createSim(sceneDef, opts = {}) {
         inService: [],                  // { p, doneAt } currently being served
         queue: [],                      // waiting their turn
         hits: 0, misses: 0,             // cache
+        failures: 0,                    // calls this node refused or fumbled
+        pending: [],                    // retries waiting out a backoff
+        breakers: new Map(),            // one per downstream, keyed by node id
       }
   }
 
@@ -78,6 +87,10 @@ export function createSim(sceneDef, opts = {}) {
     state.nodes = (def.nodes || []).map(makeNode)
     state.edges = (def.edges || []).map(e => ({ ...e, off: false }))
     state.sections = (def.sections || []).map(x => ({ ...x, spec: x }))
+    // A group object IS its spec. Sections keep a separate `spec` and write
+    // through to it; groups have no portrait variant and no derived runtime
+    // fields, so one object cannot drift from the other.
+    state.groups = (def.groups || []).map(g => ({ ...g, children: [...(g.children || [])] }))
     reset()
     stageEntrance(state.animTime)
   }
@@ -121,10 +134,11 @@ export function createSim(sceneDef, opts = {}) {
   function snapshot() {
     return JSON.stringify({
       nodes: state.nodes.map(n => ({ ...n.spec, x: n.x, y: n.y })),
-      edges: state.edges.map(e => ({ from: e.from, to: e.to })),
+      edges: state.edges.map(e => edgeSpec(e)),
       sections: state.sections.map(x => ({
         id: x.id, label: x.label, x: x.x, y: x.y, w: x.w, h: x.h, tone: x.tone ?? null,
       })),
+      groups: state.groups.map(g => ({ ...g, children: [...g.children] })),
     })
   }
 
@@ -142,7 +156,9 @@ export function createSim(sceneDef, opts = {}) {
         found.x = spec.x
         found.y = spec.y
         found.rps = spec.rps ?? DEFAULT_RPS
-        found.capacity = spec.capacity ?? typeOf(found).capacity
+        // No capacity assignment: it is a derived getter now, and writing to it
+        // threw on every undo that a node survived. latency and concurrency come
+        // back with the spec above, which is what capacity is computed from.
         found.label = spec.label ?? typeOf(found).name
       } else {
         const n = makeNode(spec)
@@ -154,6 +170,8 @@ export function createSim(sceneDef, opts = {}) {
 
     state.edges = snap.edges.map(e => ({ ...e, off: false }))
     state.sections = snap.sections.map(x => ({ ...x, spec: x }))
+    state.groups = (snap.groups || []).map(g => ({ ...g, children: [...g.children] }))
+    pruneGroups()
     state.packets = state.packets.filter(p => byId(p.from) && byId(p.to))
     syncScene()
   }
@@ -163,8 +181,9 @@ export function createSim(sceneDef, opts = {}) {
   // remembered to write through.
   function syncScene() {
     state.scene.nodes = state.nodes.map(n => n.spec)
-    state.scene.edges = state.edges.map(e => ({ from: e.from, to: e.to }))
+    state.scene.edges = state.edges.map(e => edgeSpec(e))
     state.scene.sections = state.sections.map(x => x.spec)
+    state.scene.groups = state.groups
   }
 
   // --- sections -------------------------------------------------------------
@@ -218,10 +237,13 @@ export function createSim(sceneDef, opts = {}) {
 
   // Moving a section carries its contents. That is the whole point of grouping,
   // and it is why membership is resolved before the move, not after.
-  function moveSection(id, dx, dy) {
+  // `carry` is the Alt-drag escape hatch. Geometric membership means a section
+  // adopts whatever it happens to cover, so moving one can haul objects you
+  // never meant to group — this is how you reposition the frame alone.
+  function moveSection(id, dx, dy, { carry = true } = {}) {
     const sec = state.sections.find(s2 => s2.id === id)
     if (!sec) return
-    const carried = nodesIn(sec)
+    const carried = carry ? nodesIn(sec) : []
     sec.x = clamp01(sec.x + dx)
     sec.y = clamp01(sec.y + dy)
     sec.spec.x = sec.x
@@ -231,6 +253,153 @@ export function createSim(sceneDef, opts = {}) {
       n.y = clamp01(n.y + dy)
       if (state.portrait) n.spec.portrait = [n.x, n.y]
       else { n.spec.x = n.x; n.spec.y = n.y }
+    }
+  }
+
+
+  // --- groups ---------------------------------------------------------------
+  // Folding is a VIEW operation: nothing below touches routing, queueing or
+  // capacity. The simulation keeps running the members it can no longer see,
+  // which is what makes folding free of consequence — and testable.
+
+  const world = v => Math.max(WORLD_MIN, Math.min(WORLD_MAX, v))
+  const anyId = id => byId(id) || groupById(state, id)
+
+  // Where a child item sits, whichever kind it is.
+  function posOf(id) {
+    const n = byId(id)
+    if (n) return { x: n.x, y: n.y }          // already resolved for this layout
+    const g = groupById(state, id)
+    return g ? groupPos(g, state.portrait) : null
+  }
+
+  // A group writes back into whichever layout is on screen, exactly as a node
+  // does. Without this, arranging a board at 9:16 silently edited the 16:9 one.
+  function place(g, x, y) {
+    if (state.portrait) g.portrait = [x, y]
+    else { g.x = x; g.y = y }
+  }
+
+  function centroid(ids) {
+    const pts = ids.map(posOf).filter(Boolean)
+    if (!pts.length) return { x: 0.5, y: 0.5 }
+    return {
+      x: pts.reduce((s2, p) => s2 + p.x, 0) / pts.length,
+      y: pts.reduce((s2, p) => s2 + p.y, 0) / pts.length,
+    }
+  }
+
+  // Grouping a selection that spans two different parents would have to pick
+  // one of them to reparent into, and there is no right answer — so it is
+  // refused with a reason rather than guessed at.
+  function addGroup(label, itemIds) {
+    const ids = [...new Set(itemIds)].filter(anyId)
+    if (ids.length < 2) return { error: 'select at least two objects to group' }
+
+    const parents = new Set(ids.map(id => parentOf(state, id)?.id ?? null))
+    if (parents.size > 1) return { error: 'that selection spans two groups' }
+    const parent = parentOf(state, ids[0])
+
+    // One id space for nodes and groups: the view graph draws both as items,
+    // and an edge retargeted onto a proxy has to name it unambiguously.
+    let id = 'group', i = 1
+    while (anyId(id)) id = `group${++i}`
+
+    const at = centroid(ids)
+    const g = { id, label: label || 'Group', children: ids, folded: false, x: at.x, y: at.y }
+    state.groups.push(g)
+
+    if (parent) {
+      const first = Math.min(...ids.map(c => parent.children.indexOf(c)).filter(k => k >= 0))
+      parent.children = parent.children.filter(c => !ids.includes(c))
+      parent.children.splice(Number.isFinite(first) ? first : parent.children.length, 0, id)
+    }
+    syncScene()
+    return { group: g }
+  }
+
+  function dropGroup(id) {
+    state.groups = state.groups.filter(g => g.id !== id)
+    for (const g of state.groups) g.children = (g.children || []).filter(c => c !== id)
+  }
+
+  // Ungrouping hands the children back to whoever held the group, so dissolving
+  // a Region leaves its Services where they were instead of scattering them to
+  // the top level.
+  function removeGroup(id, { deep = false } = {}) {
+    const g = groupById(state, id)
+    if (!g) return
+    if (deep) {
+      const leaves = leavesOf(state, g)
+      const subs = subgroupsOf(state, g)
+      for (const s2 of [...subs, g]) dropGroup(s2.id)   // groups first, so pruning has nothing left to cascade
+      for (const n of leaves) removeNode(n.id)
+      syncScene()
+      return
+    }
+    const parent = parentOf(state, id)
+    const kids = [...(g.children || [])]
+    dropGroup(id)
+    if (parent) parent.children.push(...kids)
+    syncScene()
+  }
+
+  // The folded card's position is always the centroid of what it holds. That
+  // stays true through a drag because moveGroup carries the members by the same
+  // delta, so folding twice lands in the same place both times.
+  function setFolded(id, folded) {
+    const g = groupById(state, id)
+    if (!g) return
+    g.folded = !!folded
+    if (g.folded) { const c = centroid(g.children || []); place(g, c.x, c.y) }
+    syncScene()
+  }
+
+  function moveGroup(id, dx, dy) {
+    const g = groupById(state, id)
+    if (!g) return
+    for (const sub of [g, ...subgroupsOf(state, g)]) {
+      const p = groupPos(sub, state.portrait)
+      place(sub, world(p.x + dx), world(p.y + dy))
+    }
+    for (const n of leavesOf(state, g)) {
+      n.x = world(n.x + dx)
+      n.y = world(n.y + dy)
+      if (state.portrait) n.spec.portrait = [n.x, n.y]
+      else { n.spec.x = n.x; n.spec.y = n.y }
+    }
+  }
+
+  // The counterpart to grouping. A group's box is derived from its members, so
+  // dragging one "outside" only stretches the box — there is no outside. Leaving
+  // has to be an act, not a position.
+  function removeFromGroup(id) {
+    const p = parentOf(state, id)
+    if (!p) return false
+    p.children = (p.children || []).filter(c => c !== id)
+    pruneGroups()
+    syncScene()
+    return true
+  }
+
+  function renameGroup(id, label) {
+    const g = groupById(state, id)
+    if (!g) return
+    g.label = label || 'Group'
+    syncScene()
+  }
+
+  // Membership is explicit, so a deleted node has to be taken out of the list
+  // that named it — and a group emptied by that is not a group any more.
+  function pruneGroups() {
+    for (let pass = 0; pass < 8; pass++) {
+      let changed = false
+      for (const g of [...state.groups]) {
+        const alive = (g.children || []).filter(anyId)
+        if (alive.length !== (g.children || []).length) { g.children = alive; changed = true }
+        if (!alive.length) { dropGroup(g.id); changed = true }
+      }
+      if (!changed) break
     }
   }
 
@@ -244,6 +413,7 @@ export function createSim(sceneDef, opts = {}) {
     if (state.scene.edges) {
       state.scene.edges = state.scene.edges.filter(e => e.from !== id && e.to !== id)
     }
+    pruneGroups()
   }
 
   // Cards enter in flow order: sources first, then whatever they feed. Reading
@@ -353,22 +523,61 @@ export function createSim(sceneDef, opts = {}) {
 
   const byId = id => state.nodes.find(n => n.id === id)
 
-  function liveTargets(n) {
-    return state.edges
+  // An edge is no longer just a pair of ids: it carries how the call is made.
+  // `off` is runtime (a timeline step muting it), everything else is authored.
+  const EDGE_PROPS = ['async', 'protocol', 'latency', 'label']
+
+  function edgeSpec(e) {
+    const out = { from: e.from, to: e.to }
+    for (const k of EDGE_PROPS) if (e[k] != null && e[k] !== '') out[k] = e[k]
+    return out
+  }
+
+  const linkBetween = (from, to) =>
+    state.edges.find(e => e.from === from && e.to === to) ||
+    state.edges.find(e => e.from === to && e.to === from)   // responses retrace the wire
+
+  function setEdgeProp(from, to, key, value) {
+    const e = state.edges.find(x => x.from === from && x.to === to)
+    if (!e) return
+    if (value === '' || value == null) delete e[key]
+    else e[key] = value
+    syncScene()
+  }
+
+  // A replica refuses writes and a primary is where they all end up, so what a
+  // node can forward to depends on what it is holding. If nothing accepts this
+  // kind, the kind-blind targets are used — a diagram that silently drops every
+  // write because nobody declared `accepts` would be worse than a wrong one.
+  function liveTargets(n, kind) {
+    const all = state.edges
       .filter(e => e.from === n.id && !e.off)
       .map(e => byId(e.to))
       .filter(t => t && !t.dead && !t.hidden)
+    if (!kind) return all
+    const fit = all.filter(t => { const a = acceptsOf(t); return a == null || a === kind })
+    return fit.length ? fit : all.filter(t => acceptsOf(t) == null)
   }
 
-  function send(from, to, dir, trail, idx, hit = false, bornAt = null, inSystem = 0) {
+  // Options rather than positional arguments: a packet now carries a kind, a
+  // failure flag and an attempt count on top of its trail, and eight positional
+  // arguments was already one too many to read.
+  function send(from, to, dir, o = {}) {
     const a = byId(from), b = byId(to)
     if (!a || !b) return
     const dist = Math.hypot(b.x - a.x, b.y - a.y)
     state.packets.push({
       id: ++seq,
-      from, to, dir, trail, idx, hit,
-      bornAt: bornAt ?? state.time,   // set once, carried the whole way
-      inSystem,                       // queue + service time, excluding travel
+      from, to, dir,
+      trail: o.trail ?? [from],
+      idx: o.idx ?? 0,
+      hit: o.hit ?? false,
+      kind: o.kind ?? 'read',         // reads and writes go to different places
+      failed: o.failed ?? false,
+      attempts: o.attempts ?? 0,
+      detached: o.detached ?? false,  // an async hand-off; nobody is waiting on it
+      bornAt: o.bornAt ?? state.time, // set once, carried the whole way
+      inSystem: o.inSystem ?? 0,      // queue + service time, excluding travel
       progress: 0,
       dur: Math.max(220, (dist / SPEED) * 1000),
       alive: true,
@@ -388,8 +597,15 @@ export function createSim(sceneDef, opts = {}) {
   }
 
   const concOf = n => n.spec.concurrency ?? typeOf(n).concurrency ?? 1
-  const latOf  = n => n.spec.latency ?? typeOf(n).latency ?? 0
+  const baseLat = n => n.spec.latency ?? typeOf(n).latency ?? 0
+  // Degrading multiplies service time and injects errors. One flag, both
+  // symptoms, because that is what a sick service actually looks like.
+  const latOf  = n => baseLat(n) * (n.degraded ? DEGRADE_LATENCY : 1)
+  const failOf = n => n.degraded ? Math.max(failureOf(n), DEGRADE_FAILURE) : failureOf(n)
   const queueCapOf = n => n.spec.maxQueue ?? typeOf(n).maxQueue ?? 40
+  // Backlog. For a queue or a broker this is consumer lag: how far behind the
+  // readers are, which is the number people actually put on these diagrams.
+  const lagOf = n => n.queue.length
 
   // ADMISSION. A request arriving at a busy node no longer vanishes or sails
   // through — it waits. This is the whole point of modelling latency: capacity
@@ -399,6 +615,11 @@ export function createSim(sceneDef, opts = {}) {
     const n = byId(p.to)
     if (!n || n.dead || n.hidden) { state.stats.dropped++; return }
     const def = typeOf(n)
+
+    // Time on the wire is real time in the system, unlike travel animation,
+    // which is a rendering choice. It counts in both directions.
+    const link = linkBetween(p.from, p.to)
+    if (link?.latency > 0) p.inSystem = (p.inSystem ?? 0) + link.latency
 
     // Responses are work already paid for. They do not queue and do not occupy
     // a server; counting them would double every meter.
@@ -410,7 +631,7 @@ export function createSim(sceneDef, opts = {}) {
     // A limiter refuses by policy while sitting idle, which is the entire point
     // of one. That is a different thing from being busy, so it is checked first.
     if ((n.spec.rateLimit ?? def.rateLimit) != null) {
-      if (n.tokens < 1) { n.overloaded = true; state.stats.dropped++; return }
+      if (n.tokens < 1) { state.stats.dropped++; n.overloaded = true; return refuse(n, p) }
       n.tokens -= 1
     }
 
@@ -419,6 +640,17 @@ export function createSim(sceneDef, opts = {}) {
 
     n.overloaded = true
     state.stats.dropped++
+    refuse(n, p)
+  }
+
+  // A refused request has to say so. Dropping it silently left the caller
+  // waiting forever and made an overloaded service invisible to everything
+  // upstream — which also meant overload could never trip a circuit breaker,
+  // and that is the single most important interaction between the two.
+  // `dropped` still counts what this node refused; `errors` counts what the
+  // caller was told about.
+  function refuse(n, p) {
+    failBack(n, [...p.trail, n.id], p)
   }
 
   // `from` is when the server actually became free, which is not the same as
@@ -431,46 +663,202 @@ export function createSim(sceneDef, opts = {}) {
     n.inService.push({ p, doneAt: from + latOf(n) })
   }
 
-  // COMPLETION. Everything below used to run the instant a packet landed.
+  // --- circuit breaker -------------------------------------------------------
+  // State lives on the CALLER, one breaker per downstream, because that is where
+  // the decision is made: the caller is the one that has to stop calling.
+
+  function breakerFor(n, downId) {
+    const cfg = breakerOf(n)
+    if (!cfg) return null
+    let b = n.breakers.get(downId)
+    if (!b) { b = { state: 'closed', log: [], openedAt: 0, probing: false }; n.breakers.set(downId, b) }
+    b.cfg = cfg
+    return b
+  }
+
+  // Open means fail immediately without touching the downstream — that is the
+  // whole point, and it is also what stops a retry storm feeding a service that
+  // is already drowning.
+  function breakerAllows(n, downId) {
+    const b = breakerFor(n, downId)
+    if (!b || b.state === 'closed') return true
+    if (b.state === 'open') {
+      if (state.time - b.openedAt < b.cfg.resetAfter) return false
+      b.state = 'half'
+      b.probing = false
+    }
+    if (b.state === 'half') {
+      if (b.probing) return false      // exactly one probe at a time
+      b.probing = true
+      return true
+    }
+    return true
+  }
+
+  function noteResult(n, downId, ok) {
+    const b = breakerFor(n, downId)
+    if (!b) return
+    if (b.state === 'half') {
+      b.state = ok ? 'closed' : 'open'
+      if (!ok) { b.openedAt = state.time; state.stats.tripped++ }
+      b.probing = false
+      b.log.length = 0
+      return
+    }
+    b.log.push({ t: state.time, ok })
+    while (b.log.length && b.log[0].t <= state.time - b.cfg.window) b.log.shift()
+    if (b.state !== 'closed' || b.log.length < b.cfg.min) return
+    const bad = b.log.reduce((c, x) => c + (x.ok ? 0 : 1), 0) / b.log.length
+    if (bad >= b.cfg.threshold) {
+      b.state = 'open'
+      b.openedAt = state.time
+      b.probing = false
+      state.stats.tripped++
+    }
+  }
+
+  // What a caller can see about a downstream, for the wire to draw itself.
+  function breakerState(fromId, toId) {
+    const n = byId(fromId)
+    const b = n?.breakers?.get(toId)
+    if (!b) return 'closed'
+    if (b.state === 'open' && state.time - b.openedAt >= b.cfg.resetAfter) return 'half'
+    return b.state
+  }
+
+  // --- completion ------------------------------------------------------------
+
+  // Latency is recorded where the request ENDS, which is back at whoever asked
+  // — not at the sink that answered it. Recording at the sink counted only the
+  // outbound hops, so a 60ms wire showed up as 60ms instead of the 120ms a
+  // round trip actually costs.
+  //
+  // Declared network latency is a modelled cost and counts; the time a dot
+  // spends flying across the screen is a rendering choice and still does not.
+  function finish(n, trail, p, { hit = false } = {}) {
+    if (p.detached) { state.stats.jobs++; return }   // nobody is waiting on a hand-off
+    state.stats.processed++
+    const idx = trail.length - 1
+    if (idx <= 0) { recordLatency(p.inSystem ?? 0); return }   // it began and ended here
+    send(n.id, trail[idx - 1], -1,
+      { trail, idx: idx - 1, hit, kind: p.kind, bornAt: p.bornAt, inSystem: p.inSystem })
+  }
+
+  // A failure walks back the way the request came, so every caller on the path
+  // gets a chance to retry it or give up on it.
+  function failBack(n, trail, p) {
+    state.stats.errors++
+    const idx = trail.length - 1
+    if (idx <= 0) { if (!p.detached) state.stats.failed++; return }
+    send(n.id, trail[idx - 1], -1,
+      { trail, idx: idx - 1, kind: p.kind, failed: true, attempts: p.attempts,
+        detached: p.detached, bornAt: p.bornAt, inSystem: p.inSystem })
+  }
+
   function route(n, p) {
     // A response is retracing a path that was already counted on the way out.
     // Falling through to the request logic below counts it a second time and
     // sends it onward again — which is how 70 rps in produced 102 processed.
-    if (p.dir !== 1) {
-      if (p.idx <= 0) return
-      send(n.id, p.trail[p.idx - 1], -1, p.trail, p.idx - 1, p.hit, p.bornAt, p.inSystem)
-      return
-    }
+    if (p.dir !== 1) return handleResponse(n, p)
 
     const def = typeOf(n)
     const trail = [...p.trail, n.id]
-    const outs = liveTargets(n)
+
+    // This node fumbling the request. Checked before anything downstream,
+    // because a service that is failing does not politely forward first.
+    if (failOf(n) > 0 && Math.random() < failOf(n)) {
+      n.failures++
+      return failBack(n, trail, p)
+    }
+
+    const outs = liveTargets(n, p.kind)
 
     // A cache hit turns the request around here and never touches what is
     // behind it. Without this a cache was a box that forwarded everything.
     const hitRate = n.spec.hitRate ?? def.hitRate
     if (hitRate != null && Math.random() < hitRate && outs.length) {
       n.hits++
-      state.stats.processed++
       state.stats.hits++
-      recordLatency(p.inSystem ?? 0)   // a hit is a finished request, just a fast one
-      const idx = trail.length - 1
-      if (idx > 0) send(n.id, trail[idx - 1], -1, trail, idx - 1, true, p.bornAt, p.inSystem)
-      return
+      return finish(n, trail, p, { hit: true })   // a hit is a finished request, just a fast one
     }
     if (hitRate != null) n.misses++
 
-    if (roleOf(n) === 'sink' || outs.length === 0) {
-      state.stats.processed++
-      recordLatency(p.inSystem ?? 0)
-      const idx = trail.length - 1
-      if (idx === 0) return
-      send(n.id, trail[idx - 1], -1, trail, idx - 1, false, p.bornAt, p.inSystem)
+    if (roleOf(n) === 'sink' || outs.length === 0) return finish(n, trail, p)
+
+    // Every downstream refusing means fail fast, which is exactly what an open
+    // breaker is for: the caller stops calling instead of piling on.
+    const allowed = outs.filter(t => breakerAllows(n, t.id))
+    if (!allowed.length) return failBack(n, trail, p)
+
+    const next = allowed[n.rrIdx++ % allowed.length]   // round robin
+    const link = linkBetween(n.id, next.id)
+
+    // An async hand-off IS the completion. The caller is answered here and the
+    // work carries on behind it with a fresh trail, which is the difference
+    // between "the gateway called the cart service" and "the gateway dropped a
+    // job and walked away".
+    if (link?.async) {
+      send(n.id, next.id, 1, { trail: [n.id], idx: 0, kind: p.kind, detached: true })
+      return finish(n, trail, p)
+    }
+
+    send(n.id, next.id, 1,
+      { trail, idx: 0, kind: p.kind, attempts: p.attempts,
+        detached: p.detached, bornAt: p.bornAt, inSystem: p.inSystem })
+  }
+
+  // The caller's side of an answer: score it for the breaker, retry it if the
+  // policy says so, otherwise pass it back.
+  function handleResponse(n, p) {
+    noteResult(n, p.from, !p.failed)
+
+    if (p.failed) {
+      const r = retryOf(n)
+      if (r && p.attempts < r.max) {
+        const k = p.attempts + 1
+        // Exponential, with jitter, because synchronised retries are their own
+        // outage — every caller coming back at the same instant.
+        const wait = r.backoff * Math.pow(2, k - 1) * (1 + (Math.random() * 2 - 1) * r.jitter)
+        state.stats.retries++
+        n.pending.push({ p, at: state.time + Math.max(0, wait), k })
+        return
+      }
+      if (p.idx <= 0) { if (!p.detached) state.stats.failed++; return }
+      send(n.id, p.trail[p.idx - 1], -1,
+        { trail: p.trail, idx: p.idx - 1, kind: p.kind, failed: true,
+          attempts: p.attempts, detached: p.detached, bornAt: p.bornAt, inSystem: p.inSystem })
       return
     }
 
-    const next = outs[n.rrIdx++ % outs.length]   // round robin
-    send(n.id, next.id, 1, trail, 0, false, p.bornAt, p.inSystem)
+    if (p.idx <= 0) { recordLatency(p.inSystem ?? 0); return }   // home; this is the end to end
+    send(n.id, p.trail[p.idx - 1], -1,
+      { trail: p.trail, idx: p.idx - 1, hit: p.hit, kind: p.kind,
+        detached: p.detached, bornAt: p.bornAt, inSystem: p.inSystem })
+  }
+
+  // Retries waiting out their backoff. The forward trail is everything up to
+  // and including this node, which is exactly the slice the response carried.
+  function drainPending() {
+    for (const n of state.nodes) {
+      if (!n.pending.length) continue
+      const due = n.pending.filter(x => x.at <= state.time)
+      if (!due.length) continue
+      n.pending = n.pending.filter(x => x.at > state.time)
+      for (const x of due) {
+        const p = x.p
+        const trail = p.trail.slice(0, p.idx + 1)
+        const outs = liveTargets(n, p.kind).filter(t => breakerAllows(n, t.id))
+        if (!outs.length) {
+          // Nothing left to try. Give up properly rather than dropping it.
+          failBack(n, [...trail, ''], { ...p, attempts: x.k })
+          continue
+        }
+        const next = outs[n.rrIdx++ % outs.length]
+        send(n.id, next.id, 1,
+          { trail, idx: 0, kind: p.kind, attempts: x.k,
+            detached: p.detached, bornAt: p.bornAt, inSystem: p.inSystem })
+      }
+    }
   }
 
   // Called every tick: finish what is due, then pull the next waiters in.
@@ -514,15 +902,22 @@ export function createSim(sceneDef, opts = {}) {
       if (!outs.length) continue
       n.spawnAccum += dt
       const interval = 1000 / n.rps
+      const writeRatio = n.spec.writeRatio ?? 0
       while (n.spawnAccum >= interval) {
         n.spawnAccum -= interval
-        const next = outs[n.rrIdx++ % outs.length]
-        send(n.id, next.id, 1, [n.id], 0)
+        // The read/write split decided here is what makes a primary and a
+        // replica two different things rather than two boxes.
+        const kind = Math.random() < writeRatio ? 'write' : 'read'
+        const picks = liveTargets(n, kind)
+        if (!picks.length) continue
+        const next = picks[n.rrIdx++ % picks.length]
+        send(n.id, next.id, 1, { trail: [n.id], idx: 0, kind })
       }
     }
 
     // 2. nodes finish what they were serving and admit whoever was waiting
     serviceNodes()
+    drainPending()   // and retries whose backoff has run out
 
     // 3. packets are a progress value
     for (const p of state.packets) {
@@ -568,7 +963,8 @@ export function createSim(sceneDef, opts = {}) {
   function reset({ replay = false } = {}) {
     state.packets = []
     state.time = 0
-    state.stats = { processed: 0, dropped: 0, overloaded: 0, hits: 0 }
+    state.stats = { processed: 0, dropped: 0, overloaded: 0, hits: 0,
+                    errors: 0, failed: 0, retries: 0, jobs: 0, tripped: 0 }
     state.latencies = []
     for (const n of state.nodes) {
       n.rxLog = []
@@ -588,6 +984,10 @@ export function createSim(sceneDef, opts = {}) {
       n.queue = []
       n.hits = 0
       n.misses = 0
+      n.degraded = false
+      n.failures = 0
+      n.pending = []
+      n.breakers = new Map()
       n.rps = n.spec.rps ?? DEFAULT_RPS
     }
     if (replay) { state.animTime = 0; stageEntrance(0) }
@@ -597,8 +997,12 @@ export function createSim(sceneDef, opts = {}) {
     const from = byId(fromId), to = byId(toId)
     const why = connectionError(from, to, state.edges)
     if (why) return why
-    state.edges.push({ from: fromId, to: toId, off: false })
-    if (state.scene.edges) state.scene.edges.push({ from: fromId, to: toId })
+    // Wiring into a broker or a queue is asynchronous by definition, so the
+    // wire says so without being told. Everything else stays a plain call.
+    const link = { from: fromId, to: toId, off: false }
+    if (typeOf(to).asyncIn) link.async = true
+    state.edges.push(link)
+    if (state.scene.edges) state.scene.edges.push(edgeSpec(link))
     if (state.scene.autoLayout) autoLayout()
     return null
   }
@@ -608,6 +1012,14 @@ export function createSim(sceneDef, opts = {}) {
     state.edges = state.edges.filter(e => !gone(e))
     state.packets = state.packets.filter(p => !gone(p))
     if (state.scene.edges) state.scene.edges = state.scene.edges.filter(e => !gone(e))
+  }
+
+  // Alt-click in Play. Kill is binary and honest but rare; this is the failure
+  // that actually happens.
+  function degrade(id) {
+    const n = byId(id)
+    if (!n) return
+    n.degraded = !n.degraded
   }
 
   function kill(id) {
@@ -632,6 +1044,9 @@ export function createSim(sceneDef, opts = {}) {
     percentile,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
     addNode, removeNode, addSection, removeSection, moveSection, resizeSection, nodesIn,
+    addGroup, removeGroup, setFolded, moveGroup, renameGroup, removeFromGroup,
+    degrade, setEdgeProp, linkBetween, breakerState, lagOf,
+    parentOf: id => parentOf(state, id),
     snapshot, restore,
   }
 }

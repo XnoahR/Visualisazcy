@@ -63,10 +63,47 @@ export function validateScene(def) {
     for (const k of ['latency', 'concurrency', 'maxQueue', 'rateLimit']) {
       if (n[k] != null && !(n[k] > 0)) err(`${at}.${k}`, `${k} must be a positive number`)
     }
+    for (const k of ['failureRate', 'writeRatio', 'hitRate']) {
+      if (n[k] != null && !(n[k] >= 0 && n[k] <= 1)) {
+        err(`${at}.${k}`, `${k} is a share, so 0..1 — got ${n[k]}`)
+      }
+    }
+    if (n.accepts != null && !['read', 'write'].includes(n.accepts)) {
+      err(`${at}.accepts`, `accepts must be "read" or "write", got "${n.accepts}"`)
+    }
+    if (n.retry != null) {
+      if (typeof n.retry !== 'object') err(`${at}.retry`, 'retry must be { max, backoff }')
+      else {
+        if (n.retry.max != null && !(n.retry.max >= 0)) err(`${at}.retry.max`, 'max must be 0 or more')
+        if (n.retry.backoff != null && !(n.retry.backoff > 0)) err(`${at}.retry.backoff`, 'backoff must be positive ms')
+      }
+    }
+    if (n.breaker != null) {
+      if (typeof n.breaker !== 'object') err(`${at}.breaker`, 'breaker must be { threshold, window, resetAfter, min }')
+      else {
+        const b = n.breaker
+        if (b.threshold != null && !(b.threshold > 0 && b.threshold <= 1)) {
+          err(`${at}.breaker.threshold`, 'threshold is a share of failed calls, so 0..1')
+        }
+        for (const k of ['window', 'resetAfter']) {
+          if (b[k] != null && !(b[k] > 0)) err(`${at}.breaker.${k}`, `${k} must be positive ms`)
+        }
+        if (b.min != null && !(b.min >= 1)) err(`${at}.breaker.min`, 'min must be at least one call')
+      }
+    }
+    if (n.retry && !n.breaker) {
+      warn(`${at}.retry`, `"${n.id}" retries with no breaker; retries alone deepen an outage rather than ride it out`)
+    }
     for (const k of DECLARED) {
       if (n[k] != null && typeof n[k] !== 'string' && typeof n[k] !== 'number') {
         err(`${at}.${k}`, `${k} is a declared fact; it must be a string or a number`)
       }
+    }
+    if (n.color != null && !/^#[0-9a-fA-F]{6}$/.test(n.color)) {
+      err(`${at}.color`, `color must be a #rrggbb hex string, got "${n.color}"`)
+    }
+    for (const k of ['icon', 'subtitle']) {
+      if (n[k] != null && typeof n[k] !== 'string') err(`${at}.${k}`, `${k} must be a string`)
     }
     if (n.capacity != null) {
       warn(`${at}.capacity`, 'capacity is derived from latency and concurrency now; this value is ignored')
@@ -77,9 +114,19 @@ export function validateScene(def) {
   }
 
   for (const [i, e] of (def.edges || []).entries()) {
-    if (!ids.has(e.from)) err(`edges[${i}].from`, `edge from unknown node "${e.from}"`)
-    if (!ids.has(e.to)) err(`edges[${i}].to`, `edge to unknown node "${e.to}"`)
-    if (e.from === e.to) err(`edges[${i}]`, `edge points at itself ("${e.from}")`)
+    const at = `edges[${i}]`
+    if (!ids.has(e.from)) err(`${at}.from`, `edge from unknown node "${e.from}"`)
+    if (!ids.has(e.to)) err(`${at}.to`, `edge to unknown node "${e.to}"`)
+    if (e.from === e.to) err(at, `edge points at itself ("${e.from}")`)
+    if (e.latency != null && !(e.latency >= 0)) {
+      err(`${at}.latency`, 'edge latency is the network hop in ms, so 0 or more')
+    }
+    if (e.async != null && typeof e.async !== 'boolean') {
+      err(`${at}.async`, 'async is a flag; it is either a hand-off or it is not')
+    }
+    if (e.protocol != null && typeof e.protocol !== 'string') {
+      err(`${at}.protocol`, 'protocol is a label, so a string')
+    }
   }
 
   const secIds = new Set()
@@ -98,6 +145,60 @@ export function validateScene(def) {
     if (x.w <= 0 || x.h <= 0) err(at, 'a section needs a positive width and height')
     if (x.tone && !TONES.includes(x.tone)) {
       err(`${at}.tone`, `unknown tone "${x.tone}". known tones: ${TONES.join(', ')}`)
+    }
+  }
+
+
+  // Groups are an explicit membership list, which is the whole reason they are
+  // not sections — and an explicit list is a thing that can be wrong. Every
+  // rule here exists because the view graph assumes it: one parent so an edge
+  // has one substitution, no cycles so walking to the outermost fold ends.
+  const groups = def.groups || []
+  const groupIds = new Set()
+  const claimed = new Map()
+  for (const [i, g] of groups.entries()) {
+    const at = `groups[${i}]`
+    if (!g.id) { err(at, 'group needs an id'); continue }
+    if (groupIds.has(g.id)) err(at, `duplicate group id "${g.id}"`)
+    if (ids.has(g.id)) err(at, `group id "${g.id}" is already a node id; nodes and groups share one id space`)
+    groupIds.add(g.id)
+    if (!g.label) warn(`${at}.label`, 'group has no label, so its card is nameless')
+    if (!g.children?.length) err(`${at}.children`, 'a group needs at least one member')
+    for (const c of g.children || []) {
+      if (claimed.has(c)) {
+        err(`${at}.children`, `"${c}" is already a member of "${claimed.get(c)}"; every object has at most one parent`)
+      } else claimed.set(c, g.id)
+    }
+    if (g.folded) {
+      for (const axis of ['x', 'y']) {
+        if (typeof g[axis] !== 'number') err(`${at}.${axis}`, `a folded group needs a numeric ${axis}`)
+      }
+    }
+    if (g.portrait && (!Array.isArray(g.portrait) || g.portrait.length !== 2)) {
+      err(`${at}.portrait`, 'portrait must be [x, y]')
+    }
+    if (g.tone && !TONES.includes(g.tone)) {
+      err(`${at}.tone`, `unknown tone "${g.tone}". known tones: ${TONES.join(', ')}`)
+    }
+  }
+
+  for (const [i, g] of groups.entries()) {
+    for (const c of g.children || []) {
+      if (!ids.has(c) && !groupIds.has(c)) {
+        err(`groups[${i}].children`, `"${c}" is neither a known node nor a known group`)
+      }
+    }
+  }
+
+  // Walking up from every group has to terminate. A cycle would hang proxyOf,
+  // so it is an error rather than something the renderer defends against.
+  const parent = new Map()
+  for (const g of groups) for (const c of g.children || []) if (!parent.has(c)) parent.set(c, g.id)
+  for (const g of groups) {
+    const seen = new Set([g.id])
+    for (let up = parent.get(g.id); up; up = parent.get(up)) {
+      if (seen.has(up)) { err(`groups.${g.id}`, `"${g.id}" is inside itself; groups cannot contain an ancestor`); break }
+      seen.add(up)
     }
   }
 
@@ -157,7 +258,12 @@ function validateSteps(def, kind, ids, err, warn) {
     if (!(s.duration > 0)) err(`${at}.duration`, 'duration must be a positive number of ms')
     if (!s.label) warn(`${at}.label`, 'step has no label, so the chrome header will be blank')
 
-    for (const field of ['show', 'dead', 'focus']) {
+    for (const id of s.expand || []) {
+      if (!(def.groups || []).some(g => g.id === id)) {
+        err(`${at}.expand`, `references unknown group "${id}"`)
+      }
+    }
+    for (const field of ['show', 'dead', 'focus', 'degraded']) {
       for (const id of s[field] || []) {
         if (!ids.has(id)) err(`${at}.${field}`, `references unknown node "${id}"`)
       }

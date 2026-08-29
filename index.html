@@ -122,7 +122,18 @@
     border: 1px solid var(--edge); color: var(--text); padding: 0 8px;
     font-family: var(--mono); font-size: 11px; text-align: right;
   }
-  .fld input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fld input:focus-visible, .fld select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .fld input[type=color] { width: 34px; padding: 2px; height: 24px; cursor: pointer; }
+  .fld select {
+    flex: 1.1; min-width: 0; background: var(--bg); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 6px; padding: 4px 6px;
+    font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .fld button {
+    background: var(--bg); color: var(--dim); border: 1px solid var(--edge);
+    border-radius: 6px; padding: 4px 9px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .fld button:hover { color: var(--text); border-color: var(--edge-hi); }
   .fld .unit { font-family: var(--mono); font-size: 9px; color: var(--mute); width: 18px; }
   .derived {
     display: flex; justify-content: space-between; margin-top: 9px; padding-top: 9px;
@@ -259,7 +270,8 @@
 
     <div class="sep"></div>
     <div class="grp">
-      <button id="sect" title="Add a section around the middle of the board">▢ Section</button>
+      <button id="grp" title="Fold the selected objects into one card (Ctrl+G)">⊞ Group</button>
+      <button id="sect" title="Add a section around the selection, or in the nearest clear space">▢ Section</button>
       <button id="copy" title="Copy the current node positions as scene data">⧉ Layout</button>
       <button id="edit" title="Edit this scene as JSON" aria-pressed="false">✎ Source</button>
       <button id="save" title="Save this board to this browser">⌸ Save</button>
@@ -320,6 +332,12 @@
           <dt>Processed</dt>  <dd id="m-proc" style="color:var(--good)">0</dd>
           <dt>Dropped</dt>    <dd id="m-drop" style="color:var(--bad)">0</dd>
           <dt>Overloaded</dt> <dd id="m-over" style="color:var(--warn)">0</dd>
+          <dt title="Requests that gave up, after any retries">Failed</dt>
+          <dd id="m-fail" style="color:var(--bad)">0</dd>
+          <dt title="Individual calls retried after a failure">Retries</dt>
+          <dd id="m-retry" style="color:var(--warn)">0</dd>
+          <dt title="Async hand-offs finished after the caller had already been answered">Jobs</dt>
+          <dd id="m-jobs">0</dd>
           <dt>p50</dt>        <dd id="m-p50">—</dd>
           <dt>p99</dt>        <dd id="m-p99">—</dd>
         </dl>
@@ -334,6 +352,10 @@
           <b>⌫</b> delete selection · <b>Ctrl+D</b> duplicate · <b>Esc</b> deselect<br>
           <b>Pan</b> hold space and drag, or middle button · <b>Zoom</b> wheel<br>
           <b>Sections</b> drag the title to move, a corner to resize<br>
+          <b>Alt+drag</b> a section's title to move the frame without its contents<br>
+          <b>Ctrl+G</b> fold a selection into one card · <b>Ctrl+Shift+G</b> ungroup<br>
+          <b>Groups</b> double-click a folded card to open it, − on the strip to fold<br>
+          <b>Ctrl+Shift+G</b> also takes a selected object back out of its group<br>
           <b>Play</b> click an object to kill it and watch the rest cope.
         </div>
       </div>
@@ -365,7 +387,7 @@ import { SCENES, blankScene } from './scenes/index.js'
 import { validateAll, validateScene } from './src/validate.js'
 import { record, download, supported as canRecord } from './src/export.js'
 import { scene } from './src/scene.js'
-import { NODE_TYPES, capacityOf, DECLARED } from './src/registry.js'
+import { NODE_TYPES, capacityOf, DECLARED, APPEARANCE, colorOf, iconOf, subtitleOf } from './src/registry.js'
 import * as store from './src/store.js'
 import './src/renderers/slots.js'   // self-registers the 'slots' kind
 import './src/renderers/trace.js'   // and the 'trace' kind
@@ -409,6 +431,9 @@ function paint() {
   $('m-proc').textContent   = st.stats.processed
   $('m-drop').textContent   = st.stats.dropped
   $('m-over').textContent   = st.stats.overloaded
+  $('m-fail').textContent   = st.stats.failed
+  $('m-retry').textContent  = st.stats.retries
+  $('m-jobs').textContent   = st.stats.jobs
   const p50 = engine.sim.percentile(0.50), p99 = engine.sim.percentile(0.99)
   $('m-p50').textContent = p50 ? `${Math.round(p50)} ms` : '—'
   $('m-p99').textContent = p99 ? `${Math.round(p99)} ms` : '—'
@@ -446,7 +471,8 @@ $('rec').onclick = async () => {
 $('undo').onclick = () => { engine.undo(); paint() }
 $('redo').onclick = () => { engine.redo(); paint() }
 
-$('sect').onclick = () => { engine.addSection('Section', 0.3, 0.28, 0.4, 0.44); paint() }
+$('sect').onclick = () => { engine.addSectionAuto('Section'); paint() }
+$('grp').onclick = () => { engine.groupSelection() }
 
 $('copy').onclick = async () => {
   const text = engine.layout().map(p => `  ${p.id}: [${p.x}, ${p.y}],`).join('\n')
@@ -518,14 +544,19 @@ function field(id, key, label, unit, value, placeholder) {
 
 function drawInspector(ids) {
   const box = $('insp')
-  $('insp-panel').hidden = !ids.length
+  const link = engine.selectedEdge
+  $('insp-panel').hidden = !ids.length && !link
+  if (link && !ids.length) return drawEdgeInspector(link, box)
   if (!ids.length) return
   if (ids.length > 1) {
     $('insp-title').textContent = `${ids.length} selected`
-    box.innerHTML = `<div class="tip">Move them together, ⌫ to delete, Ctrl+D to duplicate.
-      Select one to edit its properties.</div>`
+    box.innerHTML = `<div class="tip">Move them together, ⌫ to delete, Ctrl+D to duplicate,
+      <b>Ctrl+G</b> to fold them into one card.</div>`
     return
   }
+
+  const g = engine.groupById(ids[0])
+  if (g) return drawGroupInspector(g, box)
 
   const n = engine.sim.byId(ids[0])
   if (!n) return
@@ -550,6 +581,45 @@ function drawInspector(ids) {
   derived.innerHTML = `<span>Capacity</span><b>${Number.isFinite(cap) ? Math.round(cap) + ' /s' : '∞'}</b>`
   box.appendChild(derived)
 
+  // Which group holds it, and the way out. A group's box is derived from its
+  // members, so dragging one "outside" only stretches the box — leaving has to
+  // be an action.
+  const parent = engine.parentOf(n.id)
+  if (parent) {
+    const row = document.createElement('div')
+    row.className = 'fld insp-sec'
+    row.innerHTML = `<label>In <b style="color:var(--text)">${parent.label}</b></label>`
+    const out = document.createElement('button')
+    out.textContent = 'Take out'
+    out.title = 'Remove this object from its group (Ctrl+Shift+G)'
+    out.onclick = () => { engine.removeFromGroup(n.id); drawInspector(engine.selection); paint() }
+    row.appendChild(out)
+    box.appendChild(row)
+  }
+
+  const look = document.createElement('div')
+  look.className = 'lbl insp-sec'
+  look.textContent = 'Appearance'
+  box.appendChild(look)
+  box.appendChild(field(n.id, 'icon', 'Badge', '', n.spec.icon ?? '', def.icon))
+  box.appendChild(field(n.id, 'subtitle', 'Under it', '', n.spec.subtitle ?? '', def.subtitle))
+  box.appendChild(colorField(n, def))
+  box.appendChild(roleField(n, def))
+
+  const beh = document.createElement('div')
+  beh.className = 'lbl insp-sec'
+  beh.textContent = 'Failure and resilience'
+  box.appendChild(beh)
+  box.appendChild(field(n.id, 'failureRate', 'Fails', '', n.spec.failureRate ?? '', '0'))
+  if ((n.spec.role ?? def.role) === 'source') {
+    box.appendChild(field(n.id, 'writeRatio', 'Writes', '', n.spec.writeRatio ?? '', '0'))
+  }
+  box.appendChild(policyField(n, 'retry', 'Retry',
+    { max: 2, backoff: 100 }, r => `${r.max}× / ${r.backoff}ms`))
+  box.appendChild(policyField(n, 'breaker', 'Breaker',
+    { threshold: 0.5, window: 2000, resetAfter: 3000, min: 5 },
+    b => `${Math.round(b.threshold * 100)}% / ${b.resetAfter}ms`))
+
   const head = document.createElement('div')
   head.className = 'lbl insp-sec'
   head.textContent = 'Declared · not simulated'
@@ -557,6 +627,164 @@ function drawInspector(ids) {
   for (const k of DECLARED) {
     box.appendChild(field(n.id, k, k[0].toUpperCase() + k.slice(1), '', n.spec[k] ?? '', '—'))
   }
+}
+
+// A group has no simulated properties of its own — everything it reports is
+// measured from its members. So the inspector offers the two things that ARE
+// its own: what it is called, and whether it is open.
+// A native colour input, so there is no picker of our own to get wrong. Blank
+// it by clearing the badge instead; a colour input has no empty state.
+function colorField(n, def) {
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  wrap.innerHTML = `<label>Colour</label>`
+  const input = document.createElement('input')
+  input.type = 'color'
+  input.value = colorOf(n)
+  input.addEventListener('input', () => { engine.setNodeProp(n.id, 'color', input.value); paint() })
+  const reset = document.createElement('button')
+  reset.textContent = '↺'
+  reset.title = `Back to the ${def.name} colour`
+  reset.onclick = () => { engine.setNodeProp(n.id, 'color', ''); drawInspector(engine.selection); paint() }
+  wrap.append(input, reset)
+  return wrap
+}
+
+// Role is the wiring contract, so it belongs next to the properties rather than
+// buried in JSON: it decides what this object may plug into.
+function roleField(n, def) {
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  wrap.innerHTML = `<label>Role</label>`
+  const sel = document.createElement('select')
+  for (const [v, t] of [['source', 'gives only'], ['router', 'gives and takes'], ['sink', 'takes only']]) {
+    const o = document.createElement('option')
+    o.value = v; o.textContent = t
+    o.selected = (n.spec.role ?? def.role) === v
+    sel.appendChild(o)
+  }
+  sel.addEventListener('change', () => {
+    engine.setNodeProp(n.id, 'role', sel.value)
+    drawInspector(engine.selection)
+    paint()
+  })
+  wrap.appendChild(sel)
+  return wrap
+}
+
+// Retry and breaker are objects, not numbers, so the inspector offers them as
+// a toggle with sensible defaults rather than a JSON box. Tuning them is what
+// the source editor is for.
+function policyField(n, key, label, preset, describe) {
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  const on = !!n.spec[key]
+  wrap.innerHTML = `<label>${label}</label>
+    <span class="unit" style="width:auto;flex:1">${on ? describe(n.spec[key]) : 'off'}</span>`
+  const b = document.createElement('button')
+  b.textContent = on ? 'Remove' : 'Add'
+  b.onclick = () => {
+    engine.setNodeProp(n.id, key, on ? '' : preset)
+    drawInspector(engine.selection)
+    paint()
+  }
+  wrap.appendChild(b)
+  return wrap
+}
+
+// An edge is a thing with properties now, so it gets its own panel. It is not
+// in `selection` because that holds ids and an edge has none — it is a pair.
+function drawEdgeInspector(link, box) {
+  $('insp-title').textContent = 'Connection'
+  box.innerHTML = `<div class="tip">${link.from} → ${link.to}</div>`
+
+  const flag = document.createElement('div')
+  flag.className = 'fld'
+  flag.innerHTML = `<label>Hand-off</label>
+    <span class="unit" style="width:auto;flex:1">${link.async ? 'async — nobody waits' : 'a call, and it waits'}</span>`
+  const t = document.createElement('button')
+  t.textContent = link.async ? 'Make it a call' : 'Make it async'
+  t.onclick = () => { engine.setEdgeProp(link.from, link.to, 'async', link.async ? '' : true); redrawEdge(); }
+  flag.appendChild(t)
+  box.appendChild(flag)
+
+  box.appendChild(edgeField(link, 'protocol', 'Protocol', '', 'HTTP'))
+  box.appendChild(edgeField(link, 'latency', 'Network', 'ms', '0'))
+
+  const tip = document.createElement('div')
+  tip.className = 'tip insp-sec'
+  tip.textContent = link.async
+    ? 'The caller is answered at hand-off and the work carries on behind it.'
+    : 'Network time counts in p50, both ways. Travel across the screen never does.'
+  box.appendChild(tip)
+}
+
+function redrawEdge() {
+  const l = engine.selectedEdge
+  drawInspector(engine.selection)
+  paint()
+}
+
+function edgeField(link, key, label, unit, placeholder) {
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  wrap.innerHTML = `<label>${label}</label>
+    <input type="text" value="${link[key] ?? ''}" placeholder="${placeholder}">
+    <span class="unit">${unit}</span>`
+  const input = wrap.querySelector('input')
+  input.addEventListener('change', () => {
+    const raw = input.value.trim()
+    const num = key === 'latency' ? Number(raw) : raw
+    engine.setEdgeProp(link.from, link.to, key,
+      raw === '' ? '' : (key === 'latency' ? (Number.isFinite(num) ? num : '') : raw))
+    redrawEdge()
+  })
+  return wrap
+}
+
+function drawGroupInspector(g, box) {
+  $('insp-title').textContent = 'Group'
+  box.innerHTML = ''
+
+  const wrap = document.createElement('div')
+  wrap.className = 'fld'
+  wrap.innerHTML = `<label>Name</label><input type="text" value="${g.label ?? ''}"
+    placeholder="Cart Service"><span class="unit"></span>`
+  const input = wrap.querySelector('input')
+  input.addEventListener('change', () => {
+    engine.renameGroup(g.id, input.value.trim())
+    paint()
+  })
+  box.appendChild(wrap)
+
+  const leaves = countLeaves(g)
+  const derived = document.createElement('div')
+  derived.className = 'derived'
+  derived.innerHTML = `<span>Holds</span><b>${leaves} object${leaves === 1 ? '' : 's'}</b>`
+  box.appendChild(derived)
+
+  const row = document.createElement('div')
+  row.className = 'fld'
+  row.style.marginTop = '10px'
+  const fold = document.createElement('button')
+  fold.textContent = g.folded ? 'Unfold' : 'Fold'
+  fold.title = g.folded ? 'Show what is inside' : 'Collapse into one card'
+  fold.onclick = () => { engine.setFolded(g.id, !g.folded); drawInspector(engine.selection); paint() }
+  const un = document.createElement('button')
+  un.textContent = 'Ungroup'
+  un.title = 'Dissolve the boundary and keep the objects'
+  un.onclick = () => { engine.ungroupSelection(); paint() }
+  row.append(fold, un)
+  box.appendChild(row)
+}
+
+function countLeaves(g) {
+  let n = 0
+  for (const id of g.children || []) {
+    const sub = engine.groupById(id)
+    n += sub ? countLeaves(sub) : 1
+  }
+  return n
 }
 
 // --- saving ---------------------------------------------------------------
@@ -614,6 +842,7 @@ function describe(s) {
   if (s.kind && s.kind !== 'graph') chips.push(`<span class="chip slots">${s.kind}</span>`)
   if (s.nodes?.length) chips.push(`<span class="chip">${s.nodes.length} objects</span>`)
   if (s.sections?.length) chips.push(`<span class="chip">${s.sections.length} sections</span>`)
+  if (s.groups?.length) chips.push(`<span class="chip">${s.groups.length} groups</span>`)
   return chips.join('')
 }
 
@@ -650,10 +879,11 @@ $('home-btn').onclick = () => { engine.pause(); $('home').hidden = false; paint(
 const ROLE_LABEL = { source: 'gives', router: 'both', sink: 'takes' }
 const GROUPS = [
   ['Traffic', ['client']],
-  ['Edge', ['dns', 'edge', 'gateway', 'ratelimit']],
-  ['Routing', ['lb', 'queue', 'topic']],
-  ['Compute', ['server', 'worker']],
-  ['Data', ['cache', 'pooler', 'db', 'primary', 'replica', 'blob', 'search', 'session_store']],
+  ['Edge', ['dns', 'edge', 'waf', 'gateway', 'ratelimit']],
+  ['Routing', ['lb', 'mesh', 'queue', 'broker', 'topic']],
+  ['Compute', ['server', 'worker', 'stream', 'cron']],
+  ['Data', ['cache', 'pooler', 'db', 'primary', 'replica', 'blob', 'search', 'session_store', 'coordinator']],
+  ['Your own', ['custom']],
 ]
 
 const pal = $('palette')
@@ -688,11 +918,12 @@ let editing = false
 let edTimer = null
 
 function serialize(def) {
-  const { nodes, edges, sections, ...rest } = def
+  const { nodes, edges, sections, groups, ...rest } = def
   const out = { ...rest }
   if (nodes?.length) out.nodes = nodes
   if (edges?.length) out.edges = edges
   if (sections?.length) out.sections = sections
+  if (groups?.length) out.groups = groups
   return JSON.stringify(out, null, 2)
 }
 
