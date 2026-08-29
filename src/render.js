@@ -37,6 +37,7 @@ export function createRenderer(canvas) {
   let guides = []            // alignment lines shown while dragging
   let selection = new Set()  // ids the editor has selected
   let marquee = null         // { x0, y0, x1, y1 } in frame coords, while dragging one
+  let showFrame = true       // the dashed export bounds; noise while sketching
 
   // Camera. Frame coordinates are what every scene is authored in — the export
   // bounds. The camera is a view transform on top, so at zoom 1 centred on the
@@ -342,6 +343,7 @@ export function createRenderer(canvas) {
       ctx.font = `500 ${Math.max(8.5, 9 * S)}px ${theme.fontMono}`
       ctx.textAlign = 'right'
       ctx.fillText(`${inside.length}`, r.x + r.w - 12 * S, r.y + sh / 2 + 0.5)
+      paintSectionGrips(sec)
     }
     ctx.restore()
   }
@@ -357,6 +359,51 @@ export function createRenderer(canvas) {
   }
 
   const headHeight = () => Math.max(21, SECTION_HEAD * S)
+  const GRIP = 9
+
+  // Corners only. Edge handles on a rectangle this size are more targets than
+  // help, and a corner already reaches both axes.
+  function sectionCorners(sec) {
+    const r = sectionRect(sec)
+    return [
+      { id: 'nw', x: r.x,         y: r.y },
+      { id: 'ne', x: r.x + r.w,   y: r.y },
+      { id: 'sw', x: r.x,         y: r.y + r.h },
+      { id: 'se', x: r.x + r.w,   y: r.y + r.h },
+    ]
+  }
+
+  function paintSectionGrips(sec) {
+    const tone = sec.tone ? (theme[sec.tone] || theme.accent) : theme.accent
+    ctx.save()
+    for (const c of sectionCorners(sec)) {
+      ctx.fillStyle = theme.bg
+      ctx.strokeStyle = tone
+      ctx.lineWidth = 1.2 * S
+      const g = GRIP * S
+      roundRect(c.x - g / 2, c.y - g / 2, g, g, 2 * S)
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  // Only the hovered section offers grips, because only the hovered section
+  // draws them. Adjacent sections have overlapping corners, and letting an
+  // invisible grip win means you resize something you were not pointing at.
+  function sectionGripAt(sim, sx, sy) {
+    const p = toFrame(sx, sy)
+    const candidates = (sim.state.sections || [])
+      .filter(sec => !hoverSection || sec.id === hoverSection)
+    for (const sec of [...candidates].reverse()) {
+      for (const c of sectionCorners(sec)) {
+        if (Math.hypot(p.x - c.x, p.y - c.y) <= (GRIP + 4) * S) {
+          return { id: sec.id, corner: c.id }
+        }
+      }
+    }
+    return null
+  }
 
   function sectionRect(sec) {
     return {
@@ -511,6 +558,7 @@ export function createRenderer(canvas) {
 
   // The export bounds, visible only once you zoom out past them.
   function paintFrameEdge(anyOutside) {
+    if (!showFrame) return
     const parked = cam.zoom <= 0.995 || Math.abs(cam.x - W / 2) >= 1 ||
                    Math.abs(cam.y - H / 2) >= 1 || anyOutside
     if (!parked) return
@@ -986,7 +1034,9 @@ export function createRenderer(canvas) {
   resize()
   return {
     draw, resize, fit, hitTest, hoverTargetAt, fromPx, handleAt, edgeHitTest, sectionHeadAt,
-    snapNode, clearGuides, nodesInMarquee,
+    snapNode, clearGuides, nodesInMarquee, sectionGripAt,
+    setShowFrame: v => { showFrame = v },
+    get showFrame() { return showFrame },
     setSelection: set => { selection = set },
     setMarquee: m => { marquee = m },
     toFrame, resetCamera, frameCamera, panBy, zoomAt,

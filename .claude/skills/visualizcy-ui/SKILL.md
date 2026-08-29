@@ -121,6 +121,16 @@ Before adding any gesture, decide which mode owns it, and check it does not
 already belong to the other. Empty-space drag is selection in Edit and panning
 in Play; panning in Edit moved to space-and-drag.
 
+## A handle you cannot see should not be grabbable
+
+Section grips are offered only for the hovered section, matching what is drawn.
+The first version hit-tested every section, so two adjacent ones fought over the
+same corner and you resized the wrong one — with no way to tell, since the grip
+you grabbed was never painted.
+
+Whenever an affordance is drawn conditionally, gate its hit test on the same
+condition.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second

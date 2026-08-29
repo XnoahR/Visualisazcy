@@ -188,6 +188,27 @@ export function createSim(sceneDef, opts = {}) {
     return sec
   }
 
+  // Resizing does NOT carry the contents, unlike moving. Membership is
+  // geometric, so growing a section takes in whatever it now covers and
+  // shrinking it lets things go — which is the behaviour that makes a
+  // geometric grouping worth having.
+  const MIN_SEC = 0.06
+
+  function resizeSection(id, corner, dx, dy) {
+    const sec = state.sections.find(s2 => s2.id === id)
+    if (!sec) return
+    let { x, y, w, h } = sec
+
+    if (corner.includes('w')) { const nx = x + dx; const nw = w - dx; if (nw >= MIN_SEC) { x = nx; w = nw } }
+    if (corner.includes('e')) { const nw = w + dx; if (nw >= MIN_SEC) w = nw }
+    if (corner.includes('n')) { const ny = y + dy; const nh = h - dy; if (nh >= MIN_SEC) { y = ny; h = nh } }
+    if (corner.includes('s')) { const nh = h + dy; if (nh >= MIN_SEC) h = nh }
+
+    sec.x = clamp01(x); sec.y = clamp01(y)
+    sec.w = Math.min(w, 1 - sec.x); sec.h = Math.min(h, 1 - sec.y)
+    Object.assign(sec.spec, { x: sec.x, y: sec.y, w: sec.w, h: sec.h })
+  }
+
   function removeSection(id) {
     state.sections = state.sections.filter(s2 => s2.id !== id)
     if (state.scene.sections) {
@@ -610,7 +631,7 @@ export function createSim(sceneDef, opts = {}) {
     state, load, relayout, step, advanceAnim, reset, kill, byId, rateOf,
     percentile,
     appearOf, reveal, stageEntrance, autoLayout, connect, disconnect,
-    addNode, removeNode, addSection, removeSection, moveSection, nodesIn,
+    addNode, removeNode, addSection, removeSection, moveSection, resizeSection, nodesIn,
     snapshot, restore,
   }
 }

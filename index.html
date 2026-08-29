@@ -274,6 +274,8 @@
         <button data-a="1:1"  aria-pressed="false">1:1</button>
         <button data-a="9:16" aria-pressed="false">9:16</button>
       </div>
+      <button id="frame-toggle" class="icon" aria-pressed="true"
+              title="Show or hide the export frame — off while sketching">⛶</button>
       <div class="seg" id="zoom">
         <button data-z="0.7">S</button>
         <button data-z="1" aria-pressed="true">M</button>
@@ -331,6 +333,7 @@
           <b>Move</b> drag any selected object · <b>Connect</b> drag a ＋ handle<br>
           <b>⌫</b> delete selection · <b>Ctrl+D</b> duplicate · <b>Esc</b> deselect<br>
           <b>Pan</b> hold space and drag, or middle button · <b>Zoom</b> wheel<br>
+          <b>Sections</b> drag the title to move, a corner to resize<br>
           <b>Play</b> click an object to kill it and watch the rest cope.
         </div>
       </div>
@@ -590,6 +593,12 @@ function drawSaved() {
     }
     grid.appendChild(b)
   }
+}
+
+$('frame-toggle').onclick = () => {
+  const on = !engine.showFrame
+  engine.setShowFrame(on)
+  $('frame-toggle').setAttribute('aria-pressed', String(on))
 }
 
 $('mode').onclick = ev => {

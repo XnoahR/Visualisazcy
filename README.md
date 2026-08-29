@@ -334,6 +334,10 @@ anything outside it felt walled off — there was nowhere visible to put it.
 Recording pins the camera to the frame and restores it afterwards: a render is
 the export frame, never wherever you happened to be looking.
 
+⛶ hides the dashed outline. It marks where a render will crop, which is noise
+while you are still sketching a concept — the bounds still apply, they just stop
+being drawn.
+
 
 ![off-canvas](docs/offcanvas.png)
 
@@ -396,6 +400,15 @@ Two decisions carry it:
   contents. Making the whole body a drag target would fight panning and node
   selection. The strip is floored at 21px because it is chrome, not content: on
   a dense board the card scale drops to 0.42, which would leave a 10px handle.
+
+Drag a **corner** to resize. Resizing does not carry the contents, unlike
+moving: membership is geometric, so growing a section takes in whatever it now
+covers and shrinking it lets things go. That is the behaviour that makes a
+geometric grouping worth having.
+
+Only the hovered section offers grips, because only the hovered section draws
+them. Adjacent sections have overlapping corners, and letting an invisible grip
+win means resizing something you were not pointing at.
 
 Right-click the strip to remove the grouping; the nodes it held stay exactly
 where they are. ▢ adds one.

@@ -287,6 +287,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   let panning = null
   let wire = null
   let secDrag = null
+  let secResize = null
   let marquee = null
   let spaceDown = false
   const onNotice = opts.onNotice || (() => {})
@@ -320,6 +321,17 @@ export function createEngine(canvas, sceneDef, opts = {}) {
 
     const n = renderer.hitTest(sim, x, y)
     if (!n) {
+      // A corner grip resizes; the title strip moves. Checked first because the
+      // grips sit on the section's outline, which the strip also touches.
+      const grip = renderer.sectionGripAt(sim, x, y)
+      if (grip) {
+        const f = renderer.toFrame(x, y)
+        mark()
+        secResize = { ...grip, fx: f.x, fy: f.y }
+        try { canvas.setPointerCapture(ev.pointerId) } catch {}
+        return
+      }
+
       // A section's title strip moves the section and everything inside it.
       const sec = renderer.sectionHeadAt(sim, x, y)
       if (sec) {
@@ -376,6 +388,17 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       return
     }
 
+    if (secResize) {
+      const f = renderer.toFrame(x, y)
+      const { W, H } = renderer.size
+      sim.resizeSection(secResize.id, secResize.corner,
+        (f.x - secResize.fx) / (W * (1 - renderer.gutter)), (f.y - secResize.fy) / H)
+      secResize.fx = f.x
+      secResize.fy = f.y
+      canvas.style.cursor = 'nwse-resize'
+      return
+    }
+
     if (secDrag) {
       const f = renderer.toFrame(x, y)
       const { W, H } = renderer.size
@@ -416,8 +439,12 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       const onCard = renderer.hitTest(sim, x, y)
       renderer.setHoverEdge(over || renderer.handleAt(sim, x, y)
         ? null : renderer.edgeHitTest(sim, x, y))
+      const grip = onCard ? null : renderer.sectionGripAt(sim, x, y)
       const head = onCard ? null : renderer.sectionHeadAt(sim, x, y)
-      renderer.setHoverSection(head ? head.id : null)
+      // Hovering a grip keeps its section armed, so the grips stay drawn while
+      // you reach for one — the same trap the + handles fell into.
+      renderer.setHoverSection(grip ? grip.id : head ? head.id : null)
+      if (grip) { canvas.style.cursor = 'nwse-resize'; return }
       canvas.style.cursor = renderer.handleAt(sim, x, y) ? 'crosshair'
         : onCard || head ? 'grab' : 'default'
       return
@@ -458,6 +485,12 @@ export function createEngine(canvas, sceneDef, opts = {}) {
       if (caught.length) select(caught, { add: marquee.add })
       marquee = null
       renderer.setMarquee(null)
+      canvas.style.cursor = 'default'
+      try { canvas.releasePointerCapture(ev.pointerId) } catch {}
+      return
+    }
+    if (secResize) {
+      secResize = null
       canvas.style.cursor = 'default'
       try { canvas.releasePointerCapture(ev.pointerId) } catch {}
       return
@@ -576,6 +609,8 @@ export function createEngine(canvas, sceneDef, opts = {}) {
     goToStep, layout, state: sim.state,
     undo, redo, canUndo, canRedo, clearHistory,
     setNodeProp, setMode, get mode() { return mode }, select, clearSelection,
+    setShowFrame: v => renderer.setShowFrame(v),
+    get showFrame() { return renderer.showFrame },
     get selection() { return [...selection] }, duplicateSelection,
     beginExport, stepFrame, endExport,
     resetCamera: () => renderer.resetCamera(),
