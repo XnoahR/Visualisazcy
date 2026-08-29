@@ -114,7 +114,6 @@
   dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; }
   dt { font-size: 11.5px; color: var(--dim); }
   dd { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; text-align: right; }
-  .scenes button { display: block; width: 100%; text-align: left; margin-bottom: 4px; height: auto; padding: 7px 10px; font-weight: 500; }
   .tip { font-size: 10.5px; color: var(--mute); line-height: 1.6; }
   .fld { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .fld label { font-size: 11px; color: var(--dim); flex: 1; }
@@ -324,10 +323,6 @@
         </dl>
       </div>
 
-      <div class="panel scenes">
-        <span class="lbl">Scenes</span>
-        <div id="scenes"></div>
-      </div>
 
       <div class="panel">
         <span class="lbl">On the board</span>
@@ -419,16 +414,6 @@ function paint() {
   paintTimeline()
 }
 
-// scene list
-const list = $('scenes')
-for (const s of SCENES) {
-  const b = document.createElement('button')
-  b.textContent = s.title
-  b.setAttribute('aria-pressed', String(s === current))
-  b.dataset.id = s.id
-  b.onclick = () => open(s)
-  list.appendChild(b)
-}
 
 $('tl-prev').onclick = () => { engine.goToStep(engine.timeline.state.idx - 1); paint() }
 $('tl-next').onclick = () => { engine.goToStep(engine.timeline.state.idx + 1); paint() }
@@ -639,7 +624,6 @@ function open(def, { keepHome = false } = {}) {
   engine.load(def)
   $('caption').innerHTML =
     `<div class="now-t">${def.title}</div><div class="now-d">${def.caption || ''}</div>`
-  for (const el of list.children) el.setAttribute('aria-pressed', String(el.dataset.id === def.id))
   if (!keepHome) $('home').hidden = true
   if (editing) openEditor()
   requestAnimationFrame(sizeFrame)

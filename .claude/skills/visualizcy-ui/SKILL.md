@@ -126,8 +126,11 @@ in Play; panning in Edit moved to space-and-drag.
 Each panel is one job with one `.lbl` heading. When a panel needs a second
 heading it is two panels.
 
-Order by how often it is touched, not by how it was built. The scene list sat
-above the palette for a while purely because it was written first.
+Order by how often it is touched, not by how it was built.
+
+And before adding a panel, check the start screen does not already carry it. A
+scene list lived in the right rail for a while duplicating the one on the start
+screen, which cost a panel of reading for nothing.
 
 ## Adding a control
 
