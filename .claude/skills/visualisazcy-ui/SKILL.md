@@ -1,9 +1,9 @@
 ---
-name: visualizcy-ui
-description: Design rules for the Visualizcy app shell — layout regions, control grouping, the token set, and the specific mistakes already made here. Load before changing index.html, adding a control, or restyling any panel.
+name: visualisazcy-ui
+description: Design rules for the Visualisazcy app shell — layout regions, control grouping, the token set, and the specific mistakes already made here. Load before changing index.html, adding a control, or restyling any panel.
 ---
 
-# Visualizcy UI
+# Visualisazcy UI
 
 The app shell is `index.html` alone: markup, styles and wiring in one file. The
 engine (`src/`) never knows about the UI, and the UI never reaches into engine
@@ -225,6 +225,88 @@ objects closer than that **overlap**, and `fit()` will not save you because it
 only shrinks a composition, never a free board. Seven columns do not fit; the
 sandbox had been overlapping in two places for exactly this reason.
 
+## A single-file app is one namespace
+
+`setStatus` already existed (for the JSON editor). A second one, added for the
+ask panel, was a duplicate top-level declaration — a SyntaxError in a module, so
+the **entire** inline script failed to run and nothing on the page was wired.
+Prefix helpers by feature (`askStatus`), and grep for the name before adding a
+function to index.html.
+
+The static check that missed it used `new Function(script)`, which is sloppy
+mode and tolerates duplicate declarations. Parse inline module scripts with
+`vm.SourceTextModule` under `--experimental-vm-modules`; that is what the
+browser does.
+
+## `[hidden]` loses to any `display:` on a class
+
+`.home-sec { display: flex }` beat the browser's own `[hidden] { display: none }`,
+so an empty "Your boards" header stayed on screen with `hidden` set. Four other
+elements had each been given their own `[hidden]` rule; this one was missed.
+
+There is now one global `[hidden] { display: none !important }`. Do not add
+per-element ones.
+
+## When the MCP browsers are gone, drive one yourself
+
+The Chrome extension can be attached to a browser on a different machine — it
+returned `ERR_CONNECTION_REFUSED` for this machine's own loopback. Playwright's
+MCP server was down the same session.
+
+`~/.cache/ms-playwright/chromium_headless_shell-*/…/chrome-headless-shell` plus
+`playwright-core` from the npx cache launch a real page from node in one file.
+`page.route('https://api.anthropic.com/**', …)` mocks the model at the network
+layer, so the whole UI path runs genuinely with no key and no spend.
+
+Start the server with the sandbox disabled if a real browser has to reach it;
+the sandboxed loopback is not the host's.
+
+## A redraw replaces the element you just wrote to
+
+The settings form is rebuilt from data on every change. "2 models" and
+"ok · 16ms" were written to `#set-result` and then `persist()` rebuilt the
+form, replacing that element with a blank one — the message existed for zero
+frames. Same in the failure branch, which saved without redrawing at all, so
+the red dot only appeared on the next unrelated change.
+
+When a view is rebuilt from state: put the fact **in the state** (`lastTest`),
+persist, redraw, and only then write any transient message — to the element
+that now exists.
+
+## "Configured" and "works" are different facts
+
+A provider with a URL, a model and a key is configured. Whether it works is
+something only a test can say. One green/grey dot conflated them and showed
+green beside a provider whose key had just been rejected. Three states now:
+grey (missing something), red (last test failed), green.
+
+## In a single module, call order is declaration order
+
+`showPage()` reads `PAGES`, a `const`. The first call to it sat in the ask
+block, which is *above* the routing block that declares `PAGES` — so the page
+threw "Cannot access 'PAGES' before initialization" and rendered nothing past
+that line. A module script runs top to bottom; a `const` is in its temporal
+dead zone until the line that declares it has run, however far below the
+function that uses it.
+
+Initial calls go at the bottom, after everything they touch. The module-mode
+parse check cannot catch this one; only running the page can.
+
+## An error that names what came back is the fix half the time
+
+"The model returned something that was not JSON" told the user nothing and me
+nothing. The message now carries the parse verdict (empty / cut off / not JSON),
+the dialect it was asked in, the model, and the first 220 characters of the
+answer. Most of those failures are then obvious from the message alone.
+
+## One long page is a pile; four named pages is a place
+
+The start screen stacked describe, start, saved boards and fourteen example
+cards on one scroll. A left menu with four entries — each with a one-line
+description — and the hash as the page made it navigable, linkable and
+back-button-friendly. Boards and stories are listed apart because one is
+something you edit and the other plays as a take.
+
 ## Panels
 
 Each panel is one job with one `.lbl` heading. When a panel needs a second
@@ -247,7 +329,7 @@ screen, which cost a panel of reading for nothing.
 
 ## Verifying
 
-The app exposes `window.__visualizcy` for exactly this. Drive real gestures
+The app exposes `window.__visualisazcy` for exactly this. Drive real gestures
 (`PointerEvent`, `DragEvent`, `contextmenu`) rather than calling engine methods,
 because the gap between the two is where the bugs have actually been: the `+`
 handles were unusable for a whole session because hover was tested against the

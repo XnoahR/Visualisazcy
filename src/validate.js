@@ -113,11 +113,24 @@ export function validateScene(def) {
     }
   }
 
+  // The wiring contract the UI enforces one drag at a time, applied to a whole
+  // file: a sink cannot give and a source cannot take. Without this a scene
+  // could wire a database into a client and validate clean — which matters
+  // most when the scene was written by a model rather than a person.
+  const roleOfSpec = n => n.role ?? NODE_TYPES[n.type]?.role
+  const byId = new Map(nodes.map(n => [n.id, n]))
   for (const [i, e] of (def.edges || []).entries()) {
     const at = `edges[${i}]`
     if (!ids.has(e.from)) err(`${at}.from`, `edge from unknown node "${e.from}"`)
     if (!ids.has(e.to)) err(`${at}.to`, `edge to unknown node "${e.to}"`)
     if (e.from === e.to) err(at, `edge points at itself ("${e.from}")`)
+    const a = byId.get(e.from), b = byId.get(e.to)
+    if (a && roleOfSpec(a) === 'sink') {
+      err(`${at}.from`, `"${e.from}" is a sink and only receives; give it role "router" if it must call "${e.to}"`)
+    }
+    if (b && roleOfSpec(b) === 'source') {
+      err(`${at}.to`, `"${e.to}" is a source and only sends; nothing can be wired into it`)
+    }
     if (e.latency != null && !(e.latency >= 0)) {
       err(`${at}.latency`, 'edge latency is the network hop in ms, so 0 or more')
     }

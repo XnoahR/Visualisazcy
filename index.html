@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Visualizcy — system diagrams that run</title>
+<title>Visualisazcy — system diagrams that run</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -174,11 +174,47 @@
   .ed-errors:empty { display: none; }
 
   /* ── start screen ────────────────────────────────────────────────────── */
-  #home { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; padding: 58px 26px 80px; }
-  #home[hidden] { display: none; }
-  .home-inner { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
-  .home-head h2 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 9px; }
-  .home-head p { font-size: 13.5px; line-height: 1.6; color: var(--dim); margin: 0; max-width: 560px; }
+  /* Any display: value on a class beats the browser's own [hidden] rule, which
+     is how an empty "Your boards" header stayed on screen with hidden set. One
+     global rule, so no element needs to remember its own. */
+  [hidden] { display: none !important; }
+  /* A dashboard: one menu on the left, one page on the right. Everything used
+     to be stacked on a single scroll, which is a lot to read before you have
+     done anything; now each thing has a place and a name. */
+  #home { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: grid;
+    grid-template-columns: 220px minmax(0, 1fr); }
+  .home-nav { display: flex; flex-direction: column; gap: 3px; padding: 22px 14px; border-right: 1px solid var(--edge);
+    background: rgba(255,255,255,.012); }
+  .home-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; padding: 4px 10px 18px;
+    letter-spacing: -.01em; }
+  .home-brand svg { color: var(--accent); }
+  .home-nav a { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
+    padding: 9px 10px; border-radius: 9px; color: var(--dim); text-decoration: none; font-size: 13px; font-weight: 600;
+    border: 1px solid transparent; }
+  .home-nav a .nd { grid-column: 2 / -1; font-size: 10.5px; font-weight: 400; color: var(--mute); }
+  .home-nav a .ni { color: var(--mute); text-align: center; }
+  .home-nav a .nc { font-family: var(--mono); font-size: 9.5px; color: var(--mute); background: rgba(255,255,255,.06);
+    padding: 1px 6px; border-radius: 4px; }
+  .home-nav a .nc:empty { display: none; }
+  .home-nav a:hover { color: var(--text); background: rgba(255,255,255,.035); }
+  .home-nav a[aria-current="page"] { color: var(--text); background: rgba(110,160,255,.08); border-color: rgba(110,160,255,.3); }
+  .home-nav a[aria-current="page"] .ni { color: var(--accent); }
+  .home-nav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .home-foot { margin-top: auto; padding: 10px; font-family: var(--mono); font-size: 9.5px; color: var(--mute); line-height: 1.6; }
+  .home-main { overflow-y: auto; padding: 44px 40px 80px; }
+  .home-page { max-width: 900px; display: flex; flex-direction: column; gap: 22px; }
+  .home-head h2 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 7px; }
+  .home-head p { font-size: 13px; line-height: 1.6; color: var(--dim); margin: 0; max-width: 600px; }
+  .home-head p b { color: var(--text); font-weight: 600; }
+  .home-empty { color: var(--mute); font-size: 13px; padding: 26px 0; }
+  @media (max-width: 760px) {
+    #home { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .home-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--edge); padding: 10px; }
+    .home-brand { padding: 4px 8px; width: 100%; }
+    .home-nav a .nd { display: none; }
+    .home-foot { display: none; }
+    .home-main { padding: 22px 16px 60px; }
+  }
   .home-sec { display: flex; flex-direction: column; gap: 11px; }
   .home-start { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   /* These are <button>s, so they inherit the toolbar button base — which sets
@@ -203,42 +239,187 @@
   .chip.story { background: rgba(110,160,255,.14); color: var(--accent); }
   .chip.slots { background: rgba(252,211,77,.14); color: var(--warn); }
   @media (max-width: 760px) { .home-grid, .home-start { grid-template-columns: 1fr; } }
+
+  /* ── ask: describe a system, get a board ────────────────────────────────── */
+  .ask { display: flex; flex-direction: column; gap: 8px; }
+  .ask textarea {
+    width: 100%; min-height: 64px; resize: vertical; background: var(--card); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 10px; padding: 11px 12px;
+    font-family: var(--display); font-size: 13px; line-height: 1.5;
+  }
+  .ask textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ask textarea::placeholder { color: var(--mute); }
+  .ask-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ask-row .primary { padding: 7px 14px; }
+  .ask-status { font-family: var(--mono); font-size: 10.5px; color: var(--dim); flex: 1; min-width: 0;
+    overflow-wrap: anywhere; }
+  .ask-status[data-bad="1"] { color: var(--bad); }
+  .ask-status[data-busy="1"]::before { content: ''; display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--accent); margin-right: 7px; vertical-align: middle;
+    animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
+  .ask-settings { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    padding: 10px 12px; background: var(--card); border: 1px solid var(--edge); border-radius: 10px; }
+  .ask-settings[hidden] { display: none; }
+  .ask-settings label { font-size: 11px; color: var(--dim); }
+  .ask-settings input, .ask-settings select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--edge); border-radius: 6px;
+    padding: 6px 8px; font: inherit; font-size: 12px; font-family: var(--mono); width: 100%;
+  }
+  .ask-settings input:focus-visible, .ask-settings select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ask-settings .hint { grid-column: 1 / -1; font-size: 10.5px; color: var(--mute); line-height: 1.5; }
+  .ask-settings .hint b { color: var(--dim); font-weight: 500; }
+  .ask-examples { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ask-examples button { font-size: 11px; padding: 4px 9px; height: auto; white-space: normal; text-align: left;
+    color: var(--dim); }
+  .ask-examples button:hover { color: var(--text); }
+
+  /* ── settings: a dashboard, one overlay, provider list + form ────────────── */
+  .set-body { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .set-body { grid-template-columns: 1fr; } }
+  .set-list, .set-form { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; }
+  .set-list { display: flex; flex-direction: column; gap: 6px; }
+  .prov {
+    display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 9px; align-items: center;
+    text-align: left; height: auto; white-space: normal; padding: 9px 10px; border-radius: 9px;
+    background: transparent; border: 1px solid transparent; cursor: pointer; font-family: var(--display);
+  }
+  .prov:hover { background: rgba(255,255,255,.035); }
+  .prov[aria-current="true"] { border-color: rgba(110,160,255,.45); background: rgba(110,160,255,.07); }
+  .prov .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mute); }
+  .prov[data-ready="1"] .dot { background: var(--good); }
+  .prov[data-ready="bad"] .dot { background: var(--bad); }
+  .prov .pn { font-size: 12.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prov .pm { font-family: var(--mono); font-size: 9.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prov .active-tag { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); background: rgba(110,160,255,.14); padding: 2px 6px; border-radius: 4px; }
+  .set-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+  .set-presets button { font-size: 11px; padding: 4px 8px; height: auto; color: var(--dim); }
+  .set-presets button:hover { color: var(--text); }
+  .set-form { display: flex; flex-direction: column; gap: 10px; }
+  .set-form .row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .set-form .row label { font-size: 11.5px; color: var(--dim); }
+  .set-form .row input, .set-form .row select {
+    min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--edge); border-radius: 7px;
+    padding: 7px 9px; font: inherit; font-size: 12px; font-family: var(--mono);
+  }
+  .set-form .row input:focus-visible, .set-form .row select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .set-form .row .sub { grid-column: 2 / -1; font-size: 10.5px; color: var(--mute); line-height: 1.5; margin-top: -3px; }
+  .set-form .row .sub a { color: var(--dim); }
+  .set-form .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px;
+    padding-top: 12px; border-top: 1px solid var(--edge); }
+  .set-form .actions .spacer { flex: 1; }
+  .set-form .actions .danger { color: var(--bad); }
+  .set-empty { color: var(--mute); font-size: 12.5px; line-height: 1.6; padding: 20px 6px; }
+  .set-result { font-family: var(--mono); font-size: 10.5px; color: var(--dim); overflow-wrap: anywhere; }
+  .set-result[data-bad="1"] { color: var(--bad); }
+  .set-result[data-ok="1"] { color: var(--good); }
+  .set-result[data-busy="1"]::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); margin-right: 7px; vertical-align: middle; animation: pulse 1s ease-in-out infinite; }
+  .set-form .icon.small { width: 30px; height: 30px; }
+  .ask-now { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--dim);
+    padding: 9px 12px; background: var(--card); border: 1px solid var(--edge); border-radius: 10px; }
+  .ask-now b { color: var(--text); font-weight: 600; }
+  .ask-now code { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .ask-now .spacer { flex: 1; }
+
+  /* ── toast: one line, bottom centre, for refusals and progress ───────────── */
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(8px);
+    background: var(--card); border: 1px solid var(--edge-hi); color: var(--text); border-radius: 9px;
+    padding: 9px 14px; font-size: 12.5px; z-index: 60; opacity: 0; pointer-events: none;
+    transition: opacity .16s, transform .16s; max-width: min(560px, 90vw); text-align: center; }
+  #toast[data-on="1"] { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast[data-bad="1"] { border-color: rgba(252,165,165,.5); }
 </style>
 </head>
 <body>
 
 <div id="home">
-  <div class="home-inner">
-    <div class="home-head">
-      <h2>Visualizcy</h2>
-      <p>System diagrams that run. Objects have capacity, traffic flows as packets, and overloading something shows you what breaks.</p>
+  <nav class="home-nav" aria-label="Sections">
+    <div class="home-brand">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7.3 11l9.4-4M7.3 13l9.4 4"/></svg>
+      Visualisazcy
     </div>
-    <div class="home-sec">
-      <div class="lbl">Start</div>
-      <div class="home-start">
-        <button class="start-card" id="new-board">
-          <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
-          <span class="sc-t">Empty canvas</span>
-          <span class="sc-d">A blank board. Drag objects in from the palette.</span>
-        </button>
-        <button class="start-card" id="new-from">
-          <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.3 11l7.4-3.6M8.3 13l7.4 3.6"/></svg></span>
-          <span class="sc-t">Sandbox</span>
-          <span class="sc-d">Nine objects already wired, for poking at.</span>
-        </button>
-      </div>
-    </div>
-    <div class="home-sec" id="saved-sec" hidden>
-      <div class="lbl">Your boards</div>
-      <div class="home-grid" id="saved-grid"></div>
-    </div>
+    <a href="#design" data-sec="design"><span class="ni">✦</span>Design<span class="nd">describe a system</span></a>
+    <a href="#boards" data-sec="boards"><span class="ni">▢</span>Boards<span class="nc" id="nav-boards-n"></span><span class="nd">what you saved</span></a>
+    <a href="#examples" data-sec="examples"><span class="ni">◫</span>Examples<span class="nd">built-in scenes</span></a>
+    <a href="#settings" data-sec="settings"><span class="ni">⚙</span>Settings<span class="nd">AI providers</span></a>
+    <div class="home-foot" id="home-foot"></div>
+  </nav>
 
-    <div class="home-sec">
-      <div class="lbl">Open a scene</div>
+  <main class="home-main">
+    <section class="home-page" data-sec="design">
+      <div class="home-head">
+        <h2>Describe a system</h2>
+        <p>Say what it is in a sentence. You get a board that runs — objects with capacity, traffic as packets, and what breaks when you overload it.</p>
+      </div>
+      <div class="ask" id="ask-home">
+        <textarea id="ask-text" rows="3" spellcheck="false"
+          placeholder="A ticketing site for a ticket war: load balancer, a waiting-room queue, payments through a third party…"></textarea>
+        <div class="ask-row">
+          <button class="primary" id="ask-go" title="Generate a board from the description (Ctrl+Enter)">✦ Design it</button>
+          <span class="ask-status" id="ask-status"></span>
+        </div>
+        <div class="ask-now" id="ask-now"></div>
+        <div class="lbl" style="margin-top:6px">Try one</div>
+        <div class="ask-examples" id="ask-examples"></div>
+      </div>
+      <div class="home-sec">
+        <div class="lbl">Or start by hand</div>
+        <div class="home-start">
+          <button class="start-card" id="new-board">
+            <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="sc-t">Empty canvas</span>
+            <span class="sc-d">A blank board. Drag objects in from the palette.</span>
+          </button>
+          <button class="start-card" id="new-from">
+            <span class="sc-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.3 11l7.4-3.6M8.3 13l7.4 3.6"/></svg></span>
+            <span class="sc-t">Sandbox</span>
+            <span class="sc-d">Nine objects already wired, for poking at.</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-page" data-sec="boards" hidden>
+      <div class="home-head">
+        <h2>Your boards</h2>
+        <p>Saved in this browser. Press <b>⌸ Save</b> on any board to keep it here.</p>
+      </div>
+      <div class="home-grid" id="saved-grid"></div>
+      <div class="home-empty" id="saved-empty">Nothing saved yet. Design one, or open an example and save it.</div>
+    </section>
+
+    <section class="home-page" data-sec="examples" hidden>
+      <div class="home-head">
+        <h2>Examples</h2>
+        <p>Built in. Boards are free to edit; stories play as a single take.</p>
+      </div>
+      <div class="lbl">Boards</div>
       <div class="home-grid" id="home-grid"></div>
-    </div>
-  </div>
+      <div class="lbl" style="margin-top:14px">Stories</div>
+      <div class="home-grid" id="story-grid"></div>
+    </section>
+
+    <section class="home-page" data-sec="settings" hidden>
+      <div class="home-head">
+        <h2>Settings</h2>
+        <p>AI providers. Keys stay in this browser and go only to the provider they belong to.</p>
+      </div>
+      <div class="set-body">
+        <aside class="set-list">
+          <span class="lbl">Providers</span>
+          <div id="prov-list"></div>
+          <span class="lbl" style="margin-top:8px">Add</span>
+          <div class="set-presets" id="prov-presets"></div>
+        </aside>
+        <section class="set-form" id="prov-form"></section>
+      </div>
+    </section>
+  </main>
 </div>
+
+<div id="toast" role="status" aria-live="polite"></div>
 
 <div class="app">
 
@@ -246,7 +427,7 @@
   <div class="bar">
     <span class="brand">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/><path d="M7.3 11l9.4-4M7.3 13l9.4 4"/></svg>
-      Visualizcy
+      Visualisazcy
     </span>
     <button class="icon" id="home-btn" aria-label="Back to the start screen" title="Back to the start screen">⌂</button>
 
@@ -275,6 +456,8 @@
       <button id="copy" title="Copy the current node positions as scene data">⧉ Layout</button>
       <button id="edit" title="Edit this scene as JSON" aria-pressed="false">✎ Source</button>
       <button id="save" title="Save this board to this browser">⌸ Save</button>
+      <button id="ask-btn" title="Ask for a change to this board" aria-pressed="false">✦ Ask</button>
+      <button class="icon" id="set-btn" aria-label="Settings" title="Settings — AI providers">⚙</button>
     </div>
 
     <div class="spacer"></div>
@@ -322,6 +505,18 @@
       <div class="panel" id="insp-panel" hidden>
         <span class="lbl" id="insp-title">Selection</span>
         <div id="insp"></div>
+      </div>
+
+      <div class="panel" id="ask-panel" hidden>
+        <span class="lbl">Ask for a change</span>
+        <div class="ask">
+          <textarea id="ask-rev" rows="3" spellcheck="false"
+            placeholder="Add a cache in front of the database and put a breaker on the gateway"></textarea>
+          <div class="ask-row">
+            <button class="primary" id="ask-rev-go" title="Revise this board (Ctrl+Enter)">✦ Revise</button>
+            <span class="ask-status" id="ask-rev-status"></span>
+          </div>
+        </div>
       </div>
 
       <div class="panel">
@@ -389,12 +584,28 @@ import { record, download, supported as canRecord } from './src/export.js'
 import { scene } from './src/scene.js'
 import { NODE_TYPES, capacityOf, DECLARED, APPEARANCE, colorOf, iconOf, subtitleOf } from './src/registry.js'
 import * as store from './src/store.js'
+import * as ai from './src/ai.js'
+import * as providers from './src/providers.js'
+
+// The app was called Visualizcy until September 2026. Storage keys carry the
+// name, so everything saved under the old one — boards, providers, the key —
+// is moved across once, here, before anything reads it. Imports above run
+// before this line, but nothing in them touches storage at import time.
+try {
+  const OLD = 'visualizcy:', NEW = 'visualisazcy:'
+  for (const k of Object.keys(localStorage)) {
+    if (!k.startsWith(OLD)) continue
+    const nk = NEW + k.slice(OLD.length)
+    if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k))
+    localStorage.removeItem(k)
+  }
+} catch {}
 import './src/renderers/slots.js'   // self-registers the 'slots' kind
 import './src/renderers/trace.js'   // and the 'trace' kind
 
 const check = validateAll(SCENES)
 if (check.errors || check.warnings) {
-  console.warn(`Visualizcy: ${check.errors} error(s), ${check.warnings} warning(s)\n${check.text}`)
+  console.warn(`Visualisazcy: ${check.errors} error(s), ${check.warnings} warning(s)\n${check.text}`)
 }
 
 const canvas = document.getElementById('c')
@@ -408,12 +619,13 @@ const engine = createEngine(canvas, current, {
     for (const el of $('mode').children) el.setAttribute('aria-pressed', String(el.dataset.m === m))
   },
   onSelection: (ids) => drawInspector(ids),
+  onNotice: (msg) => toast(msg, { bad: true }),
   onHistory: (canUndo, canRedo) => {
     $('undo').disabled = !canUndo
     $('redo').disabled = !canRedo
   },
 })
-window.__visualizcy = engine   // handy in the console, and how the tests inspect state
+window.__visualisazcy = engine   // handy in the console, and how the tests inspect state
 
 function paintTimeline() {
   const tl = engine.timeline
@@ -793,14 +1005,15 @@ $('save').onclick = () => {
   const btn = $('save')
   const res = store.save(engine.sim.state.scene)
   btn.textContent = res.ok ? '✓ Saved' : '⌸ Failed'
-  if (!res.ok) console.warn('Visualizcy: ' + res.reason)
+  if (!res.ok) console.warn('Visualisazcy: ' + res.reason)
   else drawSaved()
   setTimeout(() => { btn.textContent = '⌸ Save' }, 1500)
 }
 
 function drawSaved() {
   const rows = store.list()
-  $('saved-sec').hidden = !rows.length
+  $('saved-empty').hidden = !!rows.length
+  $('nav-boards-n').textContent = rows.length ? String(rows.length) : ''
   const grid = $('saved-grid')
   grid.innerHTML = ''
   for (const row of rows) {
@@ -843,10 +1056,12 @@ function describe(s) {
   if (s.nodes?.length) chips.push(`<span class="chip">${s.nodes.length} objects</span>`)
   if (s.sections?.length) chips.push(`<span class="chip">${s.sections.length} sections</span>`)
   if (s.groups?.length) chips.push(`<span class="chip">${s.groups.length} groups</span>`)
+  if (s.generated) chips.push(`<span class="chip story">✦ designed</span>`)
   return chips.join('')
 }
 
-const grid = $('home-grid')
+// A board is something you edit; a story plays as one take. Listing them apart
+// is the difference between "which one do I open" and reading fourteen cards.
 for (const s of SCENES) {
   const b = document.createElement('button')
   b.className = 'tpl'
@@ -854,7 +1069,7 @@ for (const s of SCENES) {
     <span class="tpl-d">${s.caption || ''}</span>
     <span class="tpl-meta">${describe(s)}</span>`
   b.onclick = () => open(s)
-  grid.appendChild(b)
+  $(s.steps ? 'story-grid' : 'home-grid').appendChild(b)
 }
 
 function open(def, { keepHome = false } = {}) {
@@ -868,9 +1083,343 @@ function open(def, { keepHome = false } = {}) {
   paint()
 }
 
+// --- toast --------------------------------------------------------------
+// The engine has been emitting refusals ("that selection spans two groups")
+// into a callback nothing listened to. Now they land here, as does progress.
+let toastTimer = null
+function toast(msg, { bad = false, ms = 2600 } = {}) {
+  const t = $('toast')
+  t.textContent = msg
+  t.dataset.bad = bad ? '1' : '0'
+  t.dataset.on = '1'
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { t.dataset.on = '0' }, ms)
+}
+
+// --- ask: a sentence in, a board out --------------------------------------
+// One function for both places. The start screen makes a new board; the rail
+// panel revises the open one, which is the same call with the current scene
+// handed along as context.
+
+const EXAMPLES = [
+  'A ticketing site for a ticket war: CDN, load balancer, a waiting-room queue in front of the checkout, payments through a third-party provider',
+  'A chat app: gateway, session store, a broker fanning messages out to workers, read replicas for history',
+  'Show what happens when the payment provider goes down and the API keeps retrying — then add a breaker',
+  'An image upload pipeline: uploads land in object storage, a queue drives resize workers, a CDN serves results',
+]
+
+for (const ex of EXAMPLES) {
+  const b = document.createElement('button')
+  b.textContent = ex
+  b.onclick = () => { $('ask-text').value = ex; $('ask-text').focus() }
+  $('ask-examples').appendChild(b)
+}
+
+// --- settings: the provider dashboard --------------------------------------
+// One overlay, a list on the left and a form on the right, the way every
+// admin screen is laid out because it is the layout that works. Everything
+// here reads and writes providers.js; nothing else in the page touches keys.
+
+let cfg = providers.load()
+let editingId = cfg.active || cfg.providers[0]?.id || null
+
+function drawAskNow() {
+  const p = providers.active(cfg)
+  $('home-foot').textContent = p ? `${p.name} · ${p.model || 'no model'}${providers.ready(p) ? '' : ' · not ready'}` : 'no provider'
+  const el = $('ask-now')
+  if (!p) {
+    el.innerHTML = `<span>No AI provider set up yet.</span><span class="spacer"></span>
+      <button class="primary" data-open-settings>⚙ Set one up</button>`
+  } else {
+    const ok = providers.ready(p)
+    el.innerHTML = `<span>Using <b>${esc(p.name)}</b> · <code>${esc(p.model || '(no model)')}</code>
+      ${ok ? '' : '<span style="color:var(--bad)">· not ready</span>'}</span>
+      <span class="spacer"></span><button data-open-settings>⚙ Settings</button>`
+  }
+  el.querySelector('[data-open-settings]').onclick = () => openSettings()
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+function openSettings(id) {
+  cfg = providers.load()
+  if (id) editingId = id
+  if (!cfg.providers.find(p => p.id === editingId)) editingId = cfg.active || cfg.providers[0]?.id || null
+  showHome('settings')
+}
+$('set-btn').onclick = () => openSettings()
+
+function persist() { providers.save(cfg); drawSettings(); drawAskNow() }
+
+function drawSettings() {
+  // the list
+  const list = $('prov-list')
+  list.innerHTML = ''
+  if (!cfg.providers.length) list.innerHTML = `<div class="set-empty">Nothing yet. Pick one below.</div>`
+  for (const p of cfg.providers) {
+    const b = document.createElement('button')
+    b.className = 'prov'
+    // Three states, because "configured" and "works" are different facts: grey
+    // is missing something, red failed its last test, green is good to go.
+    b.dataset.ready = !providers.ready(p) ? '0' : p.lastTest?.ok === false ? 'bad' : '1'
+    b.setAttribute('aria-current', String(p.id === editingId))
+    b.innerHTML = `<span class="dot"></span>
+      <span><div class="pn">${esc(p.name)}</div><div class="pm">${esc(p.model || 'no model')}</div></span>
+      ${p.id === cfg.active ? '<span class="active-tag">active</span>' : ''}`
+    b.onclick = () => { editingId = p.id; drawSettings() }
+    list.appendChild(b)
+  }
+  // presets to add
+  const pre = $('prov-presets')
+  pre.innerHTML = ''
+  for (const t of providers.PRESETS) {
+    const b = document.createElement('button')
+    b.textContent = t.name
+    b.onclick = () => {
+      const p = providers.fromPreset(t.preset)
+      cfg.providers.push(p)
+      // Take over only when the active one could not work anyway — otherwise
+      // adding a second provider would silently switch the one in use.
+      if (!providers.ready(providers.active(cfg))) cfg.active = p.id
+      editingId = p.id
+      persist()
+      $('prov-form').querySelector('input[data-k="apiKey"], input[data-k="baseUrl"]')?.focus()
+    }
+    pre.appendChild(b)
+  }
+  drawForm()
+}
+
+function drawForm() {
+  const form = $('prov-form')
+  const p = cfg.providers.find(x => x.id === editingId)
+  if (!p) { form.innerHTML = `<div class="set-empty">Add a provider on the left to configure it.</div>`; return }
+  const t = providers.presetOf(p)
+  form.innerHTML = ''
+
+  const row = (label, node, sub) => {
+    const r = document.createElement('div')
+    r.className = 'row'
+    r.innerHTML = `<label>${label}</label>`
+    r.appendChild(node)
+    if (sub) { const d = document.createElement('div'); d.className = 'sub'; d.innerHTML = sub; r.appendChild(d) }
+    form.appendChild(r)
+    return r
+  }
+  const input = (k, type = 'text', ph = '') => {
+    const i = document.createElement('input')
+    i.type = type; i.value = p[k] ?? ''; i.placeholder = ph; i.dataset.k = k
+    i.autocomplete = 'off'; i.spellcheck = false
+    i.addEventListener('change', () => {
+      p[k] = i.value.trim()
+      if (k === 'baseUrl' || k === 'model') p.jsonMode = null
+      // The same rule on the way in: a provider that just became usable steps
+      // in for an active one that is not, and never for one that is.
+      if (providers.ready(p) && !providers.ready(providers.active(cfg))) cfg.active = p.id
+      persist()
+    })
+    return i
+  }
+
+  row('Name', input('name'))
+
+  const proto = document.createElement('select')
+  for (const [v, lab] of [['anthropic', 'Anthropic Messages API'], ['openai', 'OpenAI-compatible chat/completions']]) {
+    const o = document.createElement('option'); o.value = v; o.textContent = lab; o.selected = p.protocol === v; proto.appendChild(o)
+  }
+  proto.onchange = () => { p.protocol = proto.value; p.jsonMode = null; persist() }
+  row('Protocol', proto)
+
+  row('Base URL', input('baseUrl', 'url', 'https://…'), t.hint ? esc(t.hint) : '')
+
+  // the key, hidden by default with a way to check what you typed
+  const keyWrap = document.createElement('div')
+  keyWrap.style.cssText = 'display:flex;gap:6px;min-width:0'
+  const key = input('apiKey', 'password', t.noKey ? 'not needed for a local server' : 'paste your key')
+  key.style.flex = '1'
+  const eye = document.createElement('button')
+  eye.className = 'icon small'; eye.textContent = '👁'; eye.title = 'Show or hide'; eye.setAttribute('aria-label', 'Show or hide the key')
+  eye.onclick = () => { key.type = key.type === 'password' ? 'text' : 'password' }
+  keyWrap.append(key, eye)
+  row('API key', keyWrap,
+    `${p.apiKey ? `Saved · <code>${esc(providers.masked(p.apiKey))}</code> · ` : ''}stored in this browser only, sent only to the base URL above.` +
+    (t.keyUrl ? ` <a href="${t.keyUrl}" target="_blank" rel="noopener">Get a key ↗</a>` : ''))
+
+  // model: free text with the fetched list as suggestions
+  const modelWrap = document.createElement('div')
+  modelWrap.style.cssText = 'display:flex;gap:6px;min-width:0'
+  const model = input('model', 'text', 'model id')
+  model.style.flex = '1'
+  const dl = document.createElement('datalist'); dl.id = 'models-' + p.id
+  for (const m of p.models || []) { const o = document.createElement('option'); o.value = m; dl.appendChild(o) }
+  model.setAttribute('list', dl.id)
+  const fetchBtn = document.createElement('button')
+  fetchBtn.textContent = '⟳ Fetch models'; fetchBtn.title = 'Ask the provider what it serves'
+  fetchBtn.onclick = async () => {
+    fetchBtn.disabled = true; setResult('listing models…', { busy: true })
+    try {
+      const ms = await providers.listModels(p)
+      p.models = ms
+      if (!p.model && ms.length) p.model = ms[0]
+      // persist() redraws the form, which replaces the result element — so the
+      // message has to be written after, not before, or it is wiped instantly.
+      persist()
+      setResult(`${ms.length} models`, { ok: true })
+    } catch (err) { setResult(err.message, { bad: true }) }
+    finally { fetchBtn.disabled = false }
+  }
+  modelWrap.append(model, dl, fetchBtn)
+  row('Model', modelWrap, (p.models?.length ? `${p.models.length} known — start typing to filter.` : 'Type an id, or fetch the list.'))
+
+  // actions
+  const act = document.createElement('div')
+  act.className = 'actions'
+  const testBtn = document.createElement('button')
+  testBtn.textContent = '▶ Test connection'
+  testBtn.onclick = async () => {
+    testBtn.disabled = true; setResult('testing…', { busy: true })
+    try {
+      const r = await providers.test(p)
+      p.lastTest = { ...r, at: Date.now() }
+      persist()
+      setResult(`ok · ${r.ms}ms · ${r.model}`, { ok: true })
+    } catch (err) {
+      p.lastTest = { ok: false, error: err.message, at: Date.now() }
+      persist()
+      setResult(err.message, { bad: true })
+    } finally { testBtn.disabled = false }
+  }
+  const useBtn = document.createElement('button')
+  useBtn.className = 'primary'
+  useBtn.textContent = p.id === cfg.active ? '✓ Active' : 'Use this provider'
+  useBtn.disabled = p.id === cfg.active
+  useBtn.onclick = () => { cfg.active = p.id; persist() }
+  const res = document.createElement('span'); res.className = 'set-result'; res.id = 'set-result'
+  if (p.lastTest) {
+    res.textContent = p.lastTest.ok ? `last test ok · ${p.lastTest.ms}ms · ${p.lastTest.model}` : `last test failed: ${p.lastTest.error}`
+    res.dataset.ok = p.lastTest.ok ? '1' : '0'; res.dataset.bad = p.lastTest.ok ? '0' : '1'
+  }
+  const sp = document.createElement('span'); sp.className = 'spacer'
+  const rm = document.createElement('button')
+  rm.className = 'danger'; rm.textContent = 'Remove'
+  rm.onclick = () => {
+    cfg.providers = cfg.providers.filter(x => x.id !== p.id)
+    if (cfg.active === p.id) cfg.active = cfg.providers[0]?.id || null
+    editingId = cfg.active
+    persist()
+  }
+  act.append(testBtn, useBtn, res, sp, rm)
+  form.appendChild(act)
+
+  function setResult(msg, { ok = false, bad = false, busy = false } = {}) {
+    const r = $('set-result'); if (!r) return
+    r.textContent = msg; r.dataset.ok = ok ? '1' : '0'; r.dataset.bad = bad ? '1' : '0'; r.dataset.busy = busy ? '1' : '0'
+  }
+}
+
+drawAskNow()
+drawSaved()
+
+function askStatus(el, msg, bad = false, busy = false) {
+  el.textContent = msg || ''
+  el.dataset.bad = bad ? '1' : '0'
+  el.dataset.busy = busy ? '1' : '0'
+}
+
+let asking = null
+async function ask({ prompt, current: base, button, status }) {
+  if (asking) return
+  prompt = prompt.trim()
+  if (!prompt) return askStatus(status, 'say what you want first', true)
+  if (!ai.isReady()) {
+    askStatus(status, 'set up a provider first', true)
+    return openSettings()
+  }
+  asking = new AbortController()
+  button.disabled = true
+  askStatus(status, 'designing…', false, true)
+  try {
+    const r = await ai.generateScene({
+      prompt, current: base, signal: asking.signal,
+      onStatus: m => askStatus(status, m, false, true),
+    })
+    open(r.scene)
+    const n = r.scene.nodes.length, g = (r.scene.groups || []).length
+    const tok = r.usage ? ` · ${(r.usage.input || 0) + (r.usage.output || 0)} tokens` : ''
+    askStatus(status, `${n} objects${g ? `, ${g} groups` : ''}${r.scene.steps ? `, ${r.scene.steps.length} steps` : ''}${r.relaid ? ' · relaid' : ''}${tok}`)
+    toast(`${r.scene.title} — ${n} objects via ${r.model}${r.attempts > 1 ? ', after one correction' : ''}`)
+    drawSaved()
+    drawAskNow()
+  } catch (err) {
+    if (err.name === 'AbortError') askStatus(status, 'cancelled', true)
+    else askStatus(status, err.message, true)
+  } finally {
+    asking = null
+    button.disabled = false
+  }
+}
+
+$('ask-go').onclick = () => ask({ prompt: $('ask-text').value, current: null, button: $('ask-go'), status: $('ask-status') })
+$('ask-text').addEventListener('keydown', ev => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); $('ask-go').click() }
+})
+
+$('ask-btn').onclick = () => {
+  const on = $('ask-panel').hidden
+  $('ask-panel').hidden = !on
+  $('ask-btn').setAttribute('aria-pressed', String(on))
+  if (on) $('ask-rev').focus()
+}
+$('ask-rev-go').onclick = () => ask({
+  prompt: $('ask-rev').value, current: engine.sim.state.scene,
+  button: $('ask-rev-go'), status: $('ask-rev-status'),
+})
+$('ask-rev').addEventListener('keydown', ev => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); $('ask-rev-go').click() }
+})
+
 $('new-board').onclick = () => open(blankScene())
 $('new-from').onclick = () => open(SCENES.find(s => s.id === 'sandbox'))
-$('home-btn').onclick = () => { engine.pause(); $('home').hidden = false; paint() }
+
+// --- home: four pages, one menu ---------------------------------------------
+// The hash is the page, so a section is linkable and Back does what Back does.
+const PAGES = ['design', 'boards', 'examples', 'settings']
+let lastPage = 'design'
+
+function showPage(name) {
+  if (!PAGES.includes(name)) name = 'design'
+  lastPage = name
+  for (const sec of document.querySelectorAll('.home-page')) sec.hidden = sec.dataset.sec !== name
+  for (const a of document.querySelectorAll('.home-nav a')) {
+    if (a.dataset.sec === name) a.setAttribute('aria-current', 'page')
+    else a.removeAttribute('aria-current')
+  }
+  if (name === 'settings') drawSettings()
+  if (name === 'boards') drawSaved()
+  if (name === 'design') drawAskNow()
+  document.querySelector('.home-main').scrollTop = 0
+}
+
+function showHome(page) {
+  engine.pause()
+  $('home').hidden = false
+  const want = page || (location.hash.replace('#', '') || lastPage)
+  if (location.hash.replace('#', '') !== want) history.replaceState(null, '', '#' + want)
+  showPage(want)
+  paint()
+}
+
+window.addEventListener('hashchange', () => {
+  const h = location.hash.replace('#', '')
+  if (PAGES.includes(h)) { if ($('home').hidden) showHome(h); else showPage(h) }
+})
+
+$('home-btn').onclick = () => showHome()
+
+// First paint lands on whatever the hash says. This has to sit below PAGES and
+// showPage — the ask block above runs earlier and cannot reach into a const
+// that has not been initialised yet.
+showPage(location.hash.replace('#', '') || 'design')
 
 // --- palette --------------------------------------------------------------
 // Generated from the registry, so adding a type there is the whole job of
@@ -905,7 +1454,7 @@ for (const [group, types] of GROUPS) {
       <span class="pal-name">${def.short || def.name}</span>
       <span class="pal-role">${ROLE_LABEL[def.role]}</span>`
     el.addEventListener('dragstart', ev => {
-      ev.dataTransfer.setData('text/visualizcy-type', t)
+      ev.dataTransfer.setData('text/visualisazcy-type', t)
       ev.dataTransfer.effectAllowed = 'copy'
     })
     pal.appendChild(el)

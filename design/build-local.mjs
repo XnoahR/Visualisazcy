@@ -36,7 +36,7 @@ writeFileSync(new URL('mockup.html', import.meta.url), `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Visualizcy — app mockup</title>
+<title>Visualisazcy — app mockup</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -81,7 +81,7 @@ writeFileSync(new URL('mockup.html', import.meta.url), `<!doctype html>
 </head>
 <body>
 <header>
-  <h1>Visualizcy — app mockup</h1>
+  <h1>Visualisazcy — app mockup</h1>
   <nav>
       ${nav}
   </nav>

@@ -170,6 +170,20 @@ than the caller that asked, so a network hop only ever counted one way.
 
 ---
 
+## Then: describe it and get it
+
+The last piece of the original ask — *"integrated AI-nya juga perlu"* — landed
+on top of all of the above. A sentence on the start screen becomes a board; ✦ Ask
+in the toolbar revises the open one. The system prompt is built from the
+registry at runtime, the answer is constrained to the scene schema, and
+validation errors go back to the model verbatim for one correction. Everything
+in this document is what that prompt has to describe, which is why it came last.
+
+Adding it exposed one more validator gap: an edge from a sink or into a source
+was never checked — the UI refuses it one drag at a time, but a file could carry
+it, and a model would. The check found a dead wire in a scene written the day
+before.
+
 ## Still not built
 
 - **Partitions and consumer groups.** The broker is a durable buffer with lag,

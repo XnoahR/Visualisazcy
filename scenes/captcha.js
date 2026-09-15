@@ -132,7 +132,7 @@ export const captcha = scene({
   kind: 'trace',
   title: 'How "I am not a robot" works',
   caption: 'The checkbox is not the test. Getting to it is.',
-  watermark: 'Visualizcy',
+  watermark: 'Visualisazcy',
   lanes: [
     { id: 'human', label: 'A person', points: human, metrics: hm, score: score(hm), tone: 'good' },
     { id: 'bot',   label: 'A script', points: bot,   metrics: bm, score: score(bm), tone: 'bad' },
@@ -194,7 +194,7 @@ export const captchaShort = scene({
   kind: 'trace',
   title: 'Not a robot — 10 second cut',
   caption: 'One frame, ten seconds. Nothing re-composes; only the state moves.',
-  watermark: 'Visualizcy',
+  watermark: 'Visualisazcy',
   lanes: captcha.lanes,
   steps: [
     {

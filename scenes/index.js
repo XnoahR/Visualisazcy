@@ -283,7 +283,7 @@ export const insideOne = scene({
 
     n('ship_api',    'server', 0.52, 0.75, { label: 'Shipping API', role: 'router', portrait: [0.28, 0.73] }),
     n('ship_q',      'queue',  0.72, 0.75, { portrait: [0.72, 0.73] }),
-    n('ship_worker', 'worker', 0.52, 0.89, { portrait: [0.28, 0.83] }),
+    n('ship_worker', 'worker', 0.52, 0.89, { role: 'router', portrait: [0.28, 0.83] }),
     n('ship_db',     'db',     0.72, 0.89, { portrait: [0.72, 0.83] }),
   ],
   edges: [
@@ -326,7 +326,7 @@ export const scaleStory = {
   autoLayout: true,   // positions come from the live edges of each step
   title: 'From one server to a bottleneck',
   caption: 'A six-step story. Use ‹ › to step through it by hand.',
-  watermark: 'Visualizcy',
+  watermark: 'Visualisazcy',
   nodes: [
     n('client', 'client', 0.13, 0.5,  { rps: 20,          portrait: [0.5, 0.1] }),
     n('lb',     'lb',     0.38, 0.5,  {                   portrait: [0.5, 0.3] }),
@@ -458,7 +458,7 @@ export const lru = scene({
   kind: 'slots',
   title: 'LRU: what gets evicted',
   caption: 'Five slots, and a rule about which one loses.',
-  watermark: 'Visualizcy',
+  watermark: 'Visualisazcy',
   slots: { count: 5, label: 'Cache', cellWidth: 96, cellHeight: 66 },
   steps: [
     {

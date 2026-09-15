@@ -19,7 +19,7 @@ where the interesting fact ("the gateway talks to three services") is the one
 thing you cannot see.
 
 The architecture diagram people actually draw has levels: services as boxes, and
-the inside of one service when it matters. Visualizcy currently has only the
+the inside of one service when it matters. Visualisazcy currently has only the
 innermost. **A group is a level**, and folding is how you move between them.
 
 ## What a group is

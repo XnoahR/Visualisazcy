@@ -1,4 +1,4 @@
-# Visualizcy
+# Visualisazcy
 
 System diagrams that actually run. Nodes have capacity, traffic flows as discrete
 packets, and when you overload or kill something the diagram shows you what breaks.
@@ -14,7 +14,7 @@ The same scene at 9:16, from the same data:
 ## Run it
 
 ```bash
-cd Visualizcy
+cd Visualisazcy
 python3 -m http.server 8123
 # open http://localhost:8123
 ```
@@ -205,7 +205,7 @@ stage and scaling by the size control is exact and testable:
 | size | 810x456 | 520x520 | 293x520 |
 
 At S/M the whole frame is visible; L and XL overflow deliberately and the stage
-scrolls. `.claude/skills/visualizcy-ui/SKILL.md` records the rules and the
+scrolls. `.claude/skills/visualisazcy-ui/SKILL.md` records the rules and the
 mistakes so the next change does not repeat them.
 
 ## Rendering a video
@@ -515,6 +515,93 @@ Both exist. A section says *these things are near each other*; a group says
 
 The full design note, including what was deliberately left out, is in
 [`docs/groups.md`](docs/groups.md).
+
+## The start screen is four pages
+
+A menu on the left, one page on the right, and the hash is the page — so
+`#settings` is a link and Back does what Back does.
+
+| page | what is on it |
+|---|---|
+| **✦ Design** | describe a system and get a board; or start from an empty canvas or the sandbox |
+| **▢ Boards** | what you saved in this browser, with a count in the menu |
+| **◫ Examples** | the built-in scenes, boards and stories listed apart — one you edit, the other plays as a take |
+| **⚙ Settings** | AI providers |
+
+It used to be one long scroll with all of that stacked, which was a lot to read
+before you had done anything.
+
+## Describe a system, get a board
+
+The **Design** page takes a sentence:
+
+> *A ticketing site for a ticket war: CDN, load balancer, a waiting-room queue
+> in front of the checkout, payments through a third-party provider*
+
+and returns a board that runs. **✦ Ask** in the toolbar does the same to the
+board that is open — *add a cache in front of the database and put a breaker on
+the gateway* — with the current scene handed along as context.
+
+This is what the scene format was built for. `validate.js` says it outright:
+*the point of this file is not safety, it is generation.* A scene is data, so a
+model can write one, provided a wrong one fails loudly and specifically — and
+that is the whole loop:
+
+1. Ask, with a system prompt **built from the registry at runtime**, so it can
+   never describe a type that does not exist or miss one that does.
+2. The answer is constrained to the scene's JSON schema (structured output), so
+   it always parses.
+3. Validate. On errors, hand the **exact validator messages** back with the
+   model's own first answer, and ask once more. Two failures and it stops, with
+   the reasons.
+4. If any two cards overlap, relay the board deterministically rather than ship
+   it ugly.
+
+The prompt carries the design vocabulary the model should reach for — a rate
+limiter and a queue as a waiting room in front of the fragile part, a cache for
+the read path, async through a broker for anything third-party, a breaker on
+the caller — and the layout rules the cards actually need. Ask for a *story* and
+it will add steps.
+
+### Providers
+
+⚙ opens a settings dashboard, the same shape opencode uses: named providers,
+each with a protocol, a base URL, a key and a model, and exactly one active.
+
+| protocol | speaks to |
+|---|---|
+| Anthropic Messages API | Anthropic, with structured output |
+| OpenAI-compatible `chat/completions` | OpenAI, OpenRouter, Groq, Gemini, Ollama, LM Studio, anything custom |
+
+Presets fill in the URL and the hints (Ollama needs `OLLAMA_ORIGINS=*` before a
+browser page may call it). **Fetch models** asks the provider what it actually
+serves; **Test connection** sends one word and reports the latency, the model
+that answered, or the provider's own error verbatim. The dot beside each
+provider is three-state — grey is missing something, red failed its last test,
+green is good to go — because *configured* and *works* are different facts.
+
+The OpenAI-compatible path asks for JSON three ways in descending order of
+guarantee — a strict `json_schema`, then `json_object`, then plain text — and
+remembers which one a server accepted, so the second call goes straight there
+(with the other two still behind it, in case the server changes its mind). The
+schema is rewritten for OpenAI's strict dialect, which wants every property
+listed as required and optionals expressed as nullable.
+
+What comes back is read generously: from `content`, or `reasoning_content` when
+a reasoner model put the answer there, or a tool call's arguments; fences and
+prose around the object are stripped and trailing commas dropped. When it still
+is not JSON, the error says **what came back, in which mode, from which model**
+— and tells a truncated answer apart from a wrong one, because those are
+different problems. A 400 about `max_tokens` steps the request down rather than
+failing.
+
+**Keys stay with you.** Each is stored in this browser's localStorage and sent
+only to the base URL of its own provider — never logged, never written into a
+scene, never saved with a board. The Anthropic call is a raw `fetch`, not the
+SDK, because this app has no build step and no dependencies, and the SDK would
+have been its first.
+
+Generated boards carry `generated: true` and a ✦ chip.
 
 ## Edges say how the call is made
 
@@ -855,6 +942,9 @@ index.html        demo harness
 - **Offline video render.** Export is still real-time MediaRecorder.
 - **Reusable custom types.** Custom objects are per-instance overrides; there is
   no way to define one and reuse it from the palette.
+- **Portrait layouts from the model.** A generated board is laid out for 16:9;
+  ask for it at 9:16 and it will be cramped. Two layouts is too much to ask of
+  one answer.
 - **Illustration assets.** Phones, buildings, maps as inline SVG. The reference
   work leans on these heavily; they are static art, not another engine.
 

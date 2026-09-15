@@ -800,7 +800,7 @@ export function createEngine(canvas, sceneDef, opts = {}) {
   canvas.addEventListener('dragover', ev => { ev.preventDefault() })
   canvas.addEventListener('drop', ev => {
     ev.preventDefault()
-    const type = ev.dataTransfer?.getData('text/visualizcy-type')
+    const type = ev.dataTransfer?.getData('text/visualisazcy-type')
     if (!type) return
     const { x, y } = pointAt(ev)
     const f = renderer.toFrame(x, y)

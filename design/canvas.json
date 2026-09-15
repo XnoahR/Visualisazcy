@@ -11,7 +11,7 @@
       "x": 0,
       "y": -190,
       "w": 620,
-      "text": "Visualizcy — full app\n\nInfinite pan/zoom board, palette left, inspector right, story timeline below.\nTokens lifted from src/theme.js; card anatomy matches src/render.js at scale 1\n(168x62, r12, 34px badge, 3px meter)."
+      "text": "Visualisazcy — full app\n\nInfinite pan/zoom board, palette left, inspector right, story timeline below.\nTokens lifted from src/theme.js; card anatomy matches src/render.js at scale 1\n(168x62, r12, 34px badge, 3px meter)."
     },
     {
       "id": "note-inspector",

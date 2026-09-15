@@ -9,8 +9,8 @@
 // a result rather than throwing, because losing a board is bad but taking the
 // app down with it is worse.
 
-const KEY = 'visualizcy:boards'
-const ITEM = id => `visualizcy:board:${id}`
+const KEY = 'visualisazcy:boards'
+const ITEM = id => `visualisazcy:board:${id}`
 
 function safe(fn, fallback) {
   try { return fn() } catch { return fallback }
@@ -65,6 +65,7 @@ function strip(def) {
   const out = {
     id: def.id, kind: def.kind, title: def.title, caption: def.caption,
     watermark: def.watermark, autoLayout: def.autoLayout,
+    generated: def.generated,
   }
   if (def.nodes?.length) out.nodes = def.nodes
   if (def.edges?.length) out.edges = def.edges.map(e => ({ from: e.from, to: e.to }))
